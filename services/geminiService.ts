@@ -2,10 +2,9 @@ import { GoogleGenAI, GenerateContentResponse, Part } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from '../constants';
 import { Message, GroundingSource, Language, Attachment } from '../types';
 
-const apiKey = process.env.API_KEY || '';
-
 // Initialize Gemini Client
-const getClient = () => new GoogleGenAI({ apiKey });
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+const getClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const sendMessageToGemini = async (
   history: Message[],
@@ -13,10 +12,6 @@ export const sendMessageToGemini = async (
   language: Language,
   attachments?: Attachment[]
 ): Promise<{ text: string; sources: GroundingSource[] }> => {
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please ensure process.env.API_KEY is set.");
-  }
-
   const ai = getClient();
   
   // Construct the prompt with history context manually
