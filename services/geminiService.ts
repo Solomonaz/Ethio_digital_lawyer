@@ -54,7 +54,8 @@ export const sendMessageToGemini = async (
 
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Using the high-reasoning model for legal tasks
+      model: 'gemini-3-pro-preview',
+      // model:'gemini-2.5-flash',
       contents: { parts: parts },
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
