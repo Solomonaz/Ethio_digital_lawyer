@@ -1,0 +1,7 @@
+{
+  "name": "EthioLex - Digital Legal Advisor",
+  "description": "An AI-powered legal assistant specialized in Ethiopian law, providing preliminary guidance based on the Constitution, Criminal Code, and Civil Code of Ethiopia.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
