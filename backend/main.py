@@ -1,1 +1,377 @@
-~�&
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+import base64
+
+from database import engine, Base, get_db
+from models import User, Chat, ChatMessage
+from schemas import (
+    UserCreate, UserLogin, UserResponse, Token,
+    ChatCreate, ChatResponse, SendMessageRequest
+)
+from auth import (
+    get_password_hash, verify_password, create_access_token,
+    decode_access_token
+)
+
+import google.generativeai as genai
+
+load_dotenv()
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="EthioLex Backend API")
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY not found in environment variables")
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+# System instruction for EthioLex
+SYSTEM_INSTRUCTION = """You are EthioLex, a highly skilled and professional AI Digital Lawyer specialized in Ethiopian Law.
+
+**CORE DIRECTIVE**: You are a STRICTLY LEGAL AI. You must ONLY answer questions related to Ethiopian Law, legal procedures, court cases, rights, and regulations (Constitution, Criminal Code, Civil Code, Labor Proclamation, etc.).
+
+**STRICT SCOPE ENFORCEMENT**:
+Before answering, evaluate the user's query:
+1. **Is this a legal question?** (e.g., "How do I sue?", "What is the penalty for theft?", "Landlord rights").
+2. **Is this a non-legal question?** (e.g., "How to bake injera?", "Who is the prime minister?", "Write me a poem", "Solve this math problem").
+3. **IF NON-LEGAL**: You MUST politely refuse to answer. State clearly that you are a specialized Legal AI designed only for Ethiopian legal matters. Do not provide the non-legal information.
+
+**RESPONSE GUIDELINES**:
+1. **Analyze the Situation**: Understand the legal implications.
+2. **Cite Sources**: Reference specific Articles/Proclamations when possible. Mention "Article X of the Criminal Code" or "Proclamation No. Y".
+3. **Language**: Respond in the language of the user's question (English or Amharic).
+4. **Tone**: Professional, objective, empathetic.
+5. **Disclaimer**: ALWAYS conclude with a reminder that this is information, not legal advice, and to consult a qualified lawyer.
+
+**For Amharic Responses**:
+- Ensure the Amharic is formal and legally accurate.
+- Translate legal terms appropriately."""
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
+
+# --- Dependency to get current user ---
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    username = decode_access_token(token)
+    if username is None:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+    
+    return user
+
+# --- AUTH ENDPOINTS ---
+
+@app.post("/auth/register", response_model=Token)
+async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    """Register a new user"""
+    # Check if user exists
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # Create new user
+    hashed_password = get_password_hash(user_data.password)
+    new_user = User(
+        username=user_data.username,
+        password_hash=hashed_password,
+        auth_provider="local"
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": new_user.username})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": new_user.id,
+        "username": new_user.username
+    }
+
+@app.post("/auth/token", response_model=Token)
+async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    """Login with username and password"""
+    user = db.query(User).filter(User.username == user_data.username).first()
+    
+    if not user or not verify_password(user_data.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(data={"sub": user.username})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "username": user.username
+    }
+
+@app.post("/auth/google", response_model=Token)
+async def google_login(google_data: dict, db: Session = Depends(get_db)):
+    """Google OAuth login"""
+    username = google_data.get("username")
+    email = google_data.get("email")
+    firebase_uid = google_data.get("firebaseUid")
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email required")
+    
+    # Try to find user by email first (more reliable)
+    user = db.query(User).filter(User.username == email).first()
+    
+    if not user:
+        # Create new user for Google sign-in
+        # Use email as username for uniqueness
+        user = User(
+            username=email,
+            password_hash="",  # No password for Google users
+            auth_provider="google"
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    access_token = create_access_token(data={"sub": user.username})
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "username": username or email  # Return display name
+    }
+
+@app.get("/users/me", response_model=UserResponse)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current user information"""
+    return current_user
+
+# --- CHAT ENDPOINTS ---
+
+@app.get("/chats")
+async def get_user_chats(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get all chat sessions for current user"""
+    chats = db.query(Chat).filter(Chat.user_id == current_user.id).order_by(Chat.updated_at.desc()).all()
+    
+    result = []
+    for chat in chats:
+        messages = db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).order_by(ChatMessage.timestamp).all()
+        result.append({
+            "id": str(chat.id),
+            "user_id": chat.user_id,
+            "title": chat.title,
+            "updated_at": chat.updated_at.isoformat(),
+            "messages": [
+                {
+                    "id": msg.id,
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat()
+                }
+                for msg in messages
+            ]
+        })
+    
+    return result
+
+@app.post("/chats")
+async def create_chat(
+    chat_data: ChatCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new chat session"""
+    new_chat = Chat(
+        user_id=current_user.id,
+        title=chat_data.title
+    )
+    db.add(new_chat)
+    db.commit()
+    db.refresh(new_chat)
+    
+    return {
+        "id": str(new_chat.id),
+        "user_id": new_chat.user_id,
+        "title": new_chat.title,
+        "updated_at": new_chat.updated_at.isoformat(),
+        "messages": []
+    }
+
+@app.delete("/chats/{chat_id}")
+async def delete_chat(
+    chat_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a chat session"""
+    chat = db.query(Chat).filter(Chat.id == int(chat_id), Chat.user_id == current_user.id).first()
+    
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Delete all messages first
+    db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).delete()
+    
+    # Delete chat
+    db.delete(chat)
+    db.commit()
+    
+    return {"detail": "Chat deleted successfully"}
+
+@app.post("/chats/{chat_id}/message")
+async def send_message(
+    chat_id: str,
+    message_data: SendMessageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send a message and get AI response"""
+    # Verify chat belongs to user
+    chat = db.query(Chat).filter(Chat.id == int(chat_id), Chat.user_id == current_user.id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Save user message
+    user_message = ChatMessage(
+        chat_id=chat.id,
+        role="user",
+        content=message_data.message
+    )
+    db.add(user_message)
+    db.commit()
+    
+    # Get chat history for context
+    chat_history = db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).order_by(ChatMessage.timestamp).all()
+    
+    # Prepare Gemini request
+    try:
+        if not GEMINI_API_KEY:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+            
+        model = genai.GenerativeModel(
+            model_name="gemini-2.0-flash-exp",
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+        
+        # Build conversation history
+        history = []
+        for msg in chat_history[:-1]:  # Exclude the message we just added
+            history.append({
+                "role": msg.role,
+                "parts": [msg.content]
+            })
+        
+        # Handle attachments if present
+        parts = [message_data.message]
+        if message_data.attachments:
+            for attachment in message_data.attachments:
+                if attachment["type"] == "image":
+                    # Convert base64 to image
+                    image_data = base64.b64decode(attachment["data"])
+                    parts.append({
+                        "mime_type": attachment["mimeType"],
+                        "data": image_data
+                    })
+        
+        # Start chat with history
+        chat_session = model.start_chat(history=history)
+        
+        # Configure generation
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.7,
+            top_p=0.95,
+            top_k=40,
+            max_output_tokens=2048,
+        )
+        
+        # Send message
+        response = chat_session.send_message(
+            parts,
+            generation_config=generation_config
+        )
+        
+        bot_text = response.text
+        
+        # Extract grounding sources if available
+        grounding_sources = []
+        if hasattr(response, 'grounding_metadata') and response.grounding_metadata:
+            for source in response.grounding_metadata.grounding_chunks:
+                if hasattr(source, 'web'):
+                    grounding_sources.append({
+                        "title": source.web.title if hasattr(source.web, 'title') else None,
+                        "uri": source.web.uri if hasattr(source.web, 'uri') else None
+                    })
+        
+        # Save bot response
+        bot_message = ChatMessage(
+            chat_id=chat.id,
+            role="model",
+            content=bot_text
+        )
+        db.add(bot_message)
+        
+        # Update chat title if it's the first exchange
+        if len(chat_history) == 1:  # Only user message exists
+            # Generate title from first message
+            title = message_data.message[:50] + ("..." if len(message_data.message) > 50 else "")
+            chat.title = title
+        
+        chat.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(bot_message)
+        
+        return {
+            "id": bot_message.id,
+            "role": bot_message.role,
+            "text": bot_message.content,
+            "timestamp": bot_message.timestamp.isoformat(),
+            "groundingSources": grounding_sources if grounding_sources else None
+        }
+        
+    except Exception as e:
+        print(f"Gemini API Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "status": "running",
+        "message": "EthioLex Backend API is running",
+        "version": "1.0.0"
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
