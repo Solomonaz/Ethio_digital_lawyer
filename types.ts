@@ -26,7 +26,7 @@ export interface GroundingSource {
 export interface User {
   id: string;
   username: string;
-  passwordHash?: string; // Optional for external auth
+  // passwordHash removed - auth handled by Firebase
   createdAt: Date;
   authProvider: 'local' | 'google';
 }
