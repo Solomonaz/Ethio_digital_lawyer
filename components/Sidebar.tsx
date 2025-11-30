@@ -44,7 +44,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     ];
 
     sessions.forEach(session => {
+      // Handle Firebase Timestamp conversion edge case if it slipped through props
       const date = new Date(session.updatedAt);
+      
       if (date.toDateString() === today.toDateString()) {
         groups[0].items.push(session);
       } else if (date.toDateString() === yesterday.toDateString()) {

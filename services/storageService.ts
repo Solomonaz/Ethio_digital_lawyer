@@ -1,131 +1,176 @@
+import { User, ChatSession, Message, Language, Attachment } from '../types';
 
-import { User, ChatSession, Message } from '../types';
+// API Base URL (Relative because of Vite Proxy)
+const API_URL = '/api';
 
-// Storage Keys
-const USERS_KEY = 'ethiolex_users';
-const SESSIONS_KEY = 'ethiolex_sessions';
-const CURRENT_USER_KEY = 'ethiolex_current_user';
+// --- AUTH ---
 
-// --- User Management (Simulating Backend Auth) ---
-
-export const registerUser = (username: string, password: string): User => {
-  const usersStr = localStorage.getItem(USERS_KEY);
-  const users: User[] = usersStr ? JSON.parse(usersStr) : [];
-
-  if (users.find(u => u.username === username)) {
-    throw new Error('Username already exists');
-  }
-
-  const newUser: User = {
-    id: Date.now().toString(),
-    username,
-    passwordHash: btoa(password), // Simple encoding for mock purposes
-    createdAt: new Date(),
-    authProvider: 'local'
-  };
-
-  users.push(newUser);
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  return newUser;
+export const registerUser = async (username: string, password: string): Promise<User> => {
+    const res = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Registration failed');
+    }
+    const data = await res.json();
+    localStorage.setItem('token', data.access_token);
+    return {
+        id: data.user_id.toString(),
+        username: data.username,
+        createdAt: new Date(),
+        authProvider: 'local'
+    };
 };
 
-export const loginUser = (username: string, password: string): User => {
-  const usersStr = localStorage.getItem(USERS_KEY);
-  const users: User[] = usersStr ? JSON.parse(usersStr) : [];
-  
-  const user = users.find(u => u.username === username && u.passwordHash === btoa(password) && u.authProvider === 'local');
-  
-  if (!user) {
-    throw new Error('Invalid credentials');
-  }
-  
-  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-  return user;
+export const loginUser = async (username: string, password: string): Promise<User> => {
+    const res = await fetch(`${API_URL}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    });
+    if (!res.ok) {
+        throw new Error('Invalid credentials');
+    }
+    const data = await res.json();
+    localStorage.setItem('token', data.access_token);
+    return {
+        id: data.user_id.toString(),
+        username: data.username,
+        createdAt: new Date(),
+        authProvider: 'local'
+    };
 };
 
-export const loginWithGoogle = (simulatedName: string): Promise<User> => {
-  // Simulate network delay and external auth process
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const usersStr = localStorage.getItem(USERS_KEY);
-      const users: User[] = usersStr ? JSON.parse(usersStr) : [];
-      
-      // Use timestamp for unique ID to support unicode names safely (btoa fails on unicode)
-      const googleId = "google_" + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000);
-      
-      // Check if we already have a google user with this exact name for this demo
-      let user = users.find(u => u.authProvider === 'google' && u.username === simulatedName);
-      
-      if (!user) {
-        // Create new user
-        user = {
-          id: googleId,
-          username: simulatedName,
-          createdAt: new Date(),
-          authProvider: 'google'
-        };
-        users.push(user);
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
-      }
-      
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-      resolve(user);
-    }, 1500);
-  });
+export const loginWithGoogle = async (): Promise<User> => {
+    // Simulation for frontend "Mock" google login -> Backend "Mock" google login
+    const username = prompt("Enter the name you want to use:");
+    if (!username) throw new Error("Cancelled");
+    
+    const email = `${username.toLowerCase().replace(/\s/g, '')}@gmail.com`;
+
+    const res = await fetch(`${API_URL}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email })
+    });
+    
+    if (!res.ok) throw new Error("Login failed");
+    
+    const data = await res.json();
+    localStorage.setItem('token', data.access_token);
+    return {
+        id: data.user_id.toString(),
+        username: data.username,
+        createdAt: new Date(),
+        authProvider: 'google'
+    };
 };
 
-export const logoutUser = () => {
-  localStorage.removeItem(CURRENT_USER_KEY);
+export const logoutUser = async (): Promise<void> => {
+    localStorage.removeItem('token');
 };
 
-export const getCurrentUser = (): User | null => {
-  const userStr = localStorage.getItem(CURRENT_USER_KEY);
-  return userStr ? JSON.parse(userStr) : null;
+export const observeAuthState = (callback: (user: User | null) => void) => {
+    // Check if token exists
+    const token = localStorage.getItem('token');
+    if (token) {
+        // In a real app, verify token endpoint /users/me
+        // For now, assume valid or decode JWT
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const payload = JSON.parse(jsonPayload);
+        
+        callback({
+            id: "backend-id", // User ID is inside DB, simplify for now
+            username: payload.sub,
+            createdAt: new Date(),
+            authProvider: 'local'
+        });
+    } else {
+        callback(null);
+    }
+    return () => {}; // Unsubscribe function
 };
 
-// --- Chat History Management (Simulating Backend DB) ---
+// --- CHATS ---
 
-export const getUserSessions = (userId: string): ChatSession[] => {
-  const sessionsStr = localStorage.getItem(SESSIONS_KEY);
-  const allSessions: ChatSession[] = sessionsStr ? JSON.parse(sessionsStr) : [];
-  
-  // Filter by user ID and sort by date desc
-  return allSessions
-    .filter(s => s.userId === userId)
-    .map(s => ({...s, updatedAt: new Date(s.updatedAt), messages: s.messages.map(m => ({...m, timestamp: new Date(m.timestamp)}))}))
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+const getAuthHeaders = () => ({
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Content-Type': 'application/json'
+});
+
+export const getUserSessions = async (userId: string): Promise<ChatSession[]> => {
+    const res = await fetch(`${API_URL}/chats`, { headers: getAuthHeaders() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((d: any) => ({
+        id: d.id,
+        userId: d.user_id.toString(),
+        title: d.title,
+        messages: d.messages.map((m: any) => ({
+            id: m.id.toString(),
+            role: m.role,
+            text: m.content,
+            timestamp: new Date(m.timestamp)
+        })),
+        updatedAt: new Date(d.updated_at)
+    }));
 };
 
-export const saveSession = (session: ChatSession) => {
-  const sessionsStr = localStorage.getItem(SESSIONS_KEY);
-  let allSessions: ChatSession[] = sessionsStr ? JSON.parse(sessionsStr) : [];
-  
-  const existingIndex = allSessions.findIndex(s => s.id === session.id);
-  
-  if (existingIndex >= 0) {
-    allSessions[existingIndex] = session;
-  } else {
-    allSessions.push(session);
-  }
-  
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(allSessions));
+export const createNewSession = async (userId: string): Promise<ChatSession> => {
+    const res = await fetch(`${API_URL}/chats`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ title: "New Consultation" })
+    });
+    const d = await res.json();
+    return {
+        id: d.id,
+        userId: d.user_id.toString(),
+        title: d.title,
+        messages: [],
+        updatedAt: new Date(d.updated_at)
+    };
 };
 
-export const deleteSession = (sessionId: string) => {
-  const sessionsStr = localStorage.getItem(SESSIONS_KEY);
-  let allSessions: ChatSession[] = sessionsStr ? JSON.parse(sessionsStr) : [];
-  
-  allSessions = allSessions.filter(s => s.id !== sessionId);
-  
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(allSessions));
+export const deleteSession = async (sessionId: string): Promise<void> => {
+    await fetch(`${API_URL}/chats/${sessionId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
 };
 
-export const createNewSession = (userId: string, firstMessage?: string): ChatSession => {
-  return {
-    id: Date.now().toString(),
-    userId,
-    title: firstMessage ? (firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')) : 'New Consultation',
-    messages: [],
-    updatedAt: new Date()
-  };
+export const sendMessageToBackend = async (
+    sessionId: string, 
+    message: string, 
+    language: Language, 
+    attachments: Attachment[]
+): Promise<Message> => {
+    const res = await fetch(`${API_URL}/chats/${sessionId}/message`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+            message,
+            language,
+            attachments: attachments.length > 0 ? attachments : null
+        })
+    });
+    
+    if (!res.ok) throw new Error("Failed to send message");
+    
+    const d = await res.json();
+    return {
+        id: d.id.toString(),
+        role: d.role,
+        text: d.text,
+        timestamp: new Date(d.timestamp),
+        groundingSources: d.groundingSources
+    };
 };
