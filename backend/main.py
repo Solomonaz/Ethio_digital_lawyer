@@ -280,7 +280,7 @@ async def send_message(
             raise HTTPException(status_code=500, detail="Gemini API key not configured")
             
         model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash-exp",
+            model_name="gemini-3-pro-preview",
             system_instruction=SYSTEM_INSTRUCTION
         )
         
