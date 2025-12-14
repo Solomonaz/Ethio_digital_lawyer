@@ -5,12 +5,12 @@ const API_URL = '/api';
 
 // --- AUTH ---
 
-export const registerUser = async (username: string, password: string): Promise<User> => {
+export const registerUser = async (name: string, email: string, phoneNumber: string, password: string): Promise<User> => {
     try {
         const res = await fetch(`${API_URL}/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ name, email, phone_number: phoneNumber, password })
         });
         
         if (!res.ok) {
@@ -39,12 +39,12 @@ export const registerUser = async (username: string, password: string): Promise<
     }
 };
 
-export const loginUser = async (username: string, password: string): Promise<User> => {
+export const loginUser = async (email: string, password: string): Promise<User> => {
     try {
         const res = await fetch(`${API_URL}/auth/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ email, password })
         });
         
         if (!res.ok) {

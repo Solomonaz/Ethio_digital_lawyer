@@ -4,11 +4,13 @@ from datetime import datetime
 
 # --- User Schemas ---
 class UserCreate(BaseModel):
-    username: str
+    name: str
+    email: str
+    phone_number: str
     password: str
 
 class UserLogin(BaseModel):
-    username: str
+    email: str
     password: str
 
 class GoogleLoginRequest(BaseModel):
