@@ -12,7 +12,9 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChange }) => {
   const [view, setView] = useState<'login' | 'signup'>('login');
-  const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -27,18 +29,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
     try {
       let user;
       if (view === 'login') {
-        user = await loginUser(username, password);
+        user = await loginUser(email, password);
       } else {
-        user = await registerUser(username, password);
+        user = await registerUser(name, email, phoneNumber, password);
       }
       onLogin(user);
     } catch (err: any) {
-      // Improve Firebase error messages
+      // Improve error messages
       let msg = err.message || 'Authentication failed';
-      if (msg.includes('auth/invalid-credential') || msg.includes('auth/user-not-found')) {
-        msg = "Invalid username or password.";
-      } else if (msg.includes('auth/email-already-in-use')) {
-        msg = "Username already taken.";
+      if (msg.includes('auth/invalid-credential') || msg.includes('auth/user-not-found') || msg.includes('Incorrect email or password')) {
+        msg = "Invalid email or password.";
+      } else if (msg.includes('auth/email-already-in-use') || msg.includes('Email already registered')) {
+        msg = "Email already registered.";
       }
       setError(msg);
     } finally {
@@ -106,15 +108,43 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
                 <div className="flex-grow border-t border-slate-200"></div>
             </div>
 
+            {view === 'signup' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t.name}</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                    placeholder={t.name}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t.phoneNumber}</label>
+                  <input
+                    type="tel"
+                    required
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                    placeholder={t.phoneNumber}
+                    disabled={isLoading}
+                  />
+                </div>
+              </>
+            )}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">{t.username}</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t.email}</label>
               <input
-                type="text"
+                type="email"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                placeholder={t.username}
+                placeholder={t.email}
                 disabled={isLoading}
               />
             </div>
@@ -155,6 +185,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
                 onClick={() => {
                     setView(view === 'login' ? 'signup' : 'login');
                     setError('');
+                    setName('');
+                    setEmail('');
+                    setPhoneNumber('');
+                    setPassword('');
                 }}
                 className="font-medium text-green-700 hover:text-green-800"
               >

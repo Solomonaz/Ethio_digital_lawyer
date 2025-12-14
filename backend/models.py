@@ -8,6 +8,9 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=True)
+    email = Column(String, unique=True, index=True, nullable=True)
+    phone_number = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
     auth_provider = Column(String, default="local")  # 'local' or 'google'
     created_at = Column(DateTime, default=datetime.utcnow)

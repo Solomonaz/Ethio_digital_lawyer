@@ -91,15 +91,23 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 @app.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
-    # Check if user exists
-    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    # Extract username from email (part before @)
+    username = user_data.email.split('@')[0]
+    
+    # Check if user exists by email or username
+    existing_user = db.query(User).filter(
+        (User.email == user_data.email) | (User.username == username)
+    ).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
+        raise HTTPException(status_code=400, detail="Email already registered")
     
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
-        username=user_data.username,
+        username=username,
+        name=user_data.name,
+        email=user_data.email,
+        phone_number=user_data.phone_number,
         password_hash=hashed_password,
         auth_provider="local"
     )
@@ -119,13 +127,13 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/auth/token", response_model=Token)
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    """Login with username and password"""
-    user = db.query(User).filter(User.username == user_data.username).first()
+    """Login with email and password"""
+    user = db.query(User).filter(User.email == user_data.email).first()
     
     if not user or not verify_password(user_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -148,14 +156,20 @@ async def google_login(google_data: dict, db: Session = Depends(get_db)):
     if not email:
         raise HTTPException(status_code=400, detail="Email required")
     
+    # Extract username from email (part before @)
+    username_from_email = email.split('@')[0]
+    
     # Try to find user by email first (more reliable)
-    user = db.query(User).filter(User.username == email).first()
+    user = db.query(User).filter(User.email == email).first()
     
     if not user:
         # Create new user for Google sign-in
-        # Use email as username for uniqueness
+        # Use email part as username for uniqueness
         user = User(
-            username=email,
+            username=username_from_email,
+            name=username or username_from_email,
+            email=email,
+            phone_number=None,
             password_hash="",  # No password for Google users
             auth_provider="google"
         )
@@ -169,7 +183,7 @@ async def google_login(google_data: dict, db: Session = Depends(get_db)):
         "access_token": access_token,
         "token_type": "bearer",
         "user_id": user.id,
-        "username": username or email  # Return display name
+        "username": user.username
     }
 
 @app.get("/users/me", response_model=UserResponse)
