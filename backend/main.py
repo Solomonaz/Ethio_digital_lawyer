@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 import base64
 
 from database import engine, Base, get_db
-from models import User, Chat, ChatMessage
+from models import User, Chat, ChatMessage, Payment, Setting
+import uuid
 from schemas import (
     UserCreate, UserLogin, UserResponse, Token,
     ChatCreate, ChatResponse, SendMessageRequest
@@ -86,6 +87,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     
     return user
 
+# --- Dependency to get admin user ---
+async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
+
+# --- Helper: Get search cost from settings ---
+def get_search_cost(db: Session) -> float:
+    setting = db.query(Setting).filter(Setting.key == "search_cost").first()
+    if setting:
+        return float(setting.value)
+    return 30.0  # Default
+
 # --- AUTH ENDPOINTS ---
 
 @app.post("/auth/register", response_model=Token)
@@ -137,6 +154,12 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact support.",
+        )
+    
     access_token = create_access_token(data={"sub": user.username})
     
     return {
@@ -171,11 +194,18 @@ async def google_login(google_data: dict, db: Session = Depends(get_db)):
             email=email,
             phone_number=None,
             password_hash="",  # No password for Google users
-            auth_provider="google"
+            auth_provider="google",
+            is_active=True # New users are active by default
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+    
+    if user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact support.",
+        )
     
     access_token = create_access_token(data={"sub": user.username})
     
@@ -190,6 +220,115 @@ async def google_login(google_data: dict, db: Session = Depends(get_db)):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
+
+# --- PAYMENT ENDPOINTS ---
+from services.chapa_service import ChapaService
+
+class PaymentRequest:
+    def __init__(self, amount: str, email: str, first_name: str = "EthioLex", last_name: str = "User"):
+        self.amount = amount
+        self.email = email
+        self.first_name = first_name
+        self.last_name = last_name
+
+from pydantic import BaseModel as PydanticBaseModel
+
+class PaymentInitRequest(PydanticBaseModel):
+    amount: str
+    email: str
+    first_name: str = "EthioLex"
+    last_name: str = "User"
+
+@app.post("/payment/initialize")
+async def initialize_payment(
+    request: PaymentInitRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Initialize a Chapa payment for balance recharge"""
+    tx_ref = f"ethiolex-{uuid.uuid4().hex[:12]}"
+    
+    result = ChapaService.initialize_payment(
+        email=request.email,
+        amount=request.amount,
+        first_name=request.first_name,
+        last_name=request.last_name,
+        tx_ref=tx_ref,
+        return_url=f"http://localhost:5173/payment/callback?tx_ref={tx_ref}"
+    )
+    
+    if not result or result.get("status") != "success":
+        raise HTTPException(status_code=400, detail="Failed to initialize payment")
+    
+    # Save payment record
+    new_payment = Payment(
+        user_id=current_user.id,
+        amount=float(request.amount),
+        tx_ref=tx_ref,
+        status="pending"
+    )
+    db.add(new_payment)
+    db.commit()
+    
+    return {
+        "checkout_url": result.get("data", {}).get("checkout_url"),
+        "tx_ref": tx_ref
+    }
+
+@app.get("/payment/verify/{tx_ref}")
+async def verify_payment(
+    tx_ref: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verify payment status and credit balance if successful"""
+    payment = db.query(Payment).filter(Payment.tx_ref == tx_ref).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    # Already processed
+    if payment.status == "success":
+        return {"status": "success", "message": "Payment already verified", "balance": current_user.balance}
+    
+    result = ChapaService.verify_payment(tx_ref)
+    
+    if result and result.get("status") == "success":
+        data = result.get("data", {})
+        if data.get("status") == "success":
+            payment.status = "success"
+            
+            # Credit User Balance
+            user = db.query(User).filter(User.id == payment.user_id).first()
+            if user:
+                user.balance += payment.amount
+            
+            db.commit()
+            db.refresh(user)
+            
+            return {"status": "success", "message": "Payment verified successfully", "balance": user.balance}
+    
+    return {"status": "pending", "message": "Payment verification pending or failed"}
+
+@app.post("/payment/callback")
+async def payment_callback(data: dict, db: Session = Depends(get_db)):
+    """Handle Chapa webhook/callback"""
+    tx_ref = data.get("tx_ref")
+    status_msg = data.get("status")
+    
+    if tx_ref:
+        payment = db.query(Payment).filter(Payment.tx_ref == tx_ref).first()
+        if payment and payment.status != "success":
+            if status_msg == "success":
+                payment.status = "success"
+                # Credit User Balance
+                user = db.query(User).filter(User.id == payment.user_id).first()
+                if user:
+                    user.balance += payment.amount
+            elif status_msg == "failed":
+                payment.status = "failed"
+            db.commit()
+    
+    return {"status": "ok"}
 
 # --- CHAT ENDPOINTS ---
 
@@ -276,6 +415,30 @@ async def send_message(
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     
+    # Check User Balance (Cost from settings)
+    search_cost = get_search_cost(db)
+    if current_user.balance < search_cost:
+        raise HTTPException(
+            status_code=402,  # Payment Required
+            detail=f"Insufficient balance. Your current balance is {current_user.balance:.2f} ETB. A search costs {search_cost:.2f} ETB. Please recharge to continue."
+        )
+    
+    # Deduct Search Cost
+    current_user.balance -= search_cost
+    db.commit()
+    db.refresh(current_user)
+    
+    # Check if this is the first message and update title
+    existing_messages_count = db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).count()
+    if existing_messages_count == 0:
+        # Use first ~30 chars of message as title
+        new_title = message_data.message.strip()[:30]
+        if len(message_data.message) > 30:
+            new_title += "..."
+        chat.title = new_title
+        db.commit()
+        db.refresh(chat)
+
     # Save user message
     user_message = ChatMessage(
         chat_id=chat.id,
@@ -376,6 +539,186 @@ async def send_message(
     except Exception as e:
         print(f"Gemini API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+
+# --- ADMIN ENDPOINTS ---
+
+@app.get("/admin/users")
+async def admin_get_users(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get all users (Admin only)"""
+    users = db.query(User).all()
+    return [{
+        "id": u.id,
+        "username": u.username,
+        "email": u.email,
+        "balance": u.balance,
+        "is_admin": u.is_admin,
+        "is_active": u.is_active if u.is_active is not None else True,
+        "created_at": u.created_at.isoformat() if u.created_at else None
+    } for u in users]
+
+@app.put("/admin/users/{user_id}/balance")
+async def admin_update_balance(
+    user_id: int,
+    balance_data: dict,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Update user balance (Admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    new_balance = balance_data.get("balance")
+    if new_balance is not None:
+        user.balance = float(new_balance)
+        db.commit()
+    
+    return {"message": "Balance updated", "balance": user.balance}
+
+@app.delete("/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a user (Admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail="Cannot delete admin user")
+    
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted"}
+
+@app.put("/admin/users/{user_id}/toggle-active")
+async def admin_toggle_user_active(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Toggle user active status (Admin only)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail="Cannot deactivate admin user")
+    
+    # Toggle is_active (handle None as True)
+    current_status = user.is_active if user.is_active is not None else True
+    user.is_active = not current_status
+    db.commit()
+    
+    status_text = "activated" if user.is_active else "deactivated"
+    return {"message": f"User {status_text}", "is_active": user.is_active}
+
+@app.get("/admin/payments")
+async def admin_get_payments(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get all payments (Admin only)"""
+    payments = db.query(Payment).order_by(Payment.created_at.desc()).all()
+    return [{
+        "id": p.id,
+        "user_id": p.user_id,
+        "username": p.user.username if p.user else "Unknown",
+        "amount": p.amount,
+        "tx_ref": p.tx_ref,
+        "status": p.status,
+        "created_at": p.created_at.isoformat() if p.created_at else None
+    } for p in payments]
+
+@app.put("/admin/payments/{payment_id}/approve")
+async def admin_approve_payment(
+    payment_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Manually approve a payment (Admin only)"""
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    if payment.status == "success":
+        return {"message": "Payment already approved"}
+    
+    payment.status = "success"
+    user = db.query(User).filter(User.id == payment.user_id).first()
+    if user:
+        user.balance += payment.amount
+    
+    db.commit()
+    return {"message": "Payment approved", "new_balance": user.balance if user else None}
+
+@app.put("/admin/payments/{payment_id}/reject")
+async def admin_reject_payment(
+    payment_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Reject a pending payment (Admin only)"""
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    payment.status = "failed"
+    db.commit()
+    return {"message": "Payment rejected"}
+
+@app.get("/admin/settings")
+async def admin_get_settings(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get all settings (Admin only)"""
+    settings = db.query(Setting).all()
+    return [{
+        "id": s.id,
+        "key": s.key,
+        "value": s.value,
+        "description": s.description
+    } for s in settings]
+
+@app.put("/admin/settings/{key}")
+async def admin_update_setting(
+    key: str,
+    setting_data: dict,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Update a setting (Admin only)"""
+    setting = db.query(Setting).filter(Setting.key == key).first()
+    
+    if not setting:
+        # Create if doesn't exist
+        setting = Setting(
+            key=key,
+            value=str(setting_data.get("value", "")),
+            description=setting_data.get("description", "")
+        )
+        db.add(setting)
+    else:
+        setting.value = str(setting_data.get("value", setting.value))
+        if "description" in setting_data:
+            setting.description = setting_data["description"]
+    
+    db.commit()
+    return {"message": "Setting updated", "key": key, "value": setting.value}
+
+# --- PUBLIC SETTINGS ENDPOINT ---
+
+@app.get("/settings/search-cost")
+async def get_public_search_cost(db: Session = Depends(get_db)):
+    """Get search cost setting (Public)"""
+    cost = get_search_cost(db)
+    return {"search_cost": cost}
 
 @app.get("/")
 async def root():

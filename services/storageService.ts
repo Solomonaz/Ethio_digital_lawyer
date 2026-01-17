@@ -12,7 +12,7 @@ export const registerUser = async (name: string, email: string, phoneNumber: str
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, email, phone_number: phoneNumber, password })
         });
-        
+
         if (!res.ok) {
             const errorText = await res.text();
             console.error('Registration error response:', errorText);
@@ -24,7 +24,7 @@ export const registerUser = async (name: string, email: string, phoneNumber: str
             }
             throw new Error(errorData.detail || 'Registration failed');
         }
-        
+
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
         return {
@@ -46,13 +46,13 @@ export const loginUser = async (email: string, password: string): Promise<User> 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
-        
+
         if (!res.ok) {
             const errorText = await res.text();
             console.error('Login error response:', errorText);
             throw new Error('Invalid credentials');
         }
-        
+
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
         return {
@@ -75,7 +75,7 @@ export const loginWithGoogle = async (): Promise<User> => {
 
         // Open Google Sign-In popup
         const result = await signInWithPopup(auth, googleProvider);
-        
+
         // Get user info from Google
         const firebaseUser = result.user;
         const username = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
@@ -85,20 +85,20 @@ export const loginWithGoogle = async (): Promise<User> => {
         const res = await fetch(`${API_URL}/auth/google`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                username, 
+            body: JSON.stringify({
+                username,
                 email,
                 firebaseUid: firebaseUser.uid,
                 photoURL: firebaseUser.photoURL
             })
         });
-        
+
         if (!res.ok) {
             const errorText = await res.text();
             console.error('Google login error:', errorText);
             throw new Error("Login failed");
         }
-        
+
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
         return {
@@ -124,43 +124,36 @@ export const observeAuthState = (callback: (user: User | null) => void) => {
     // Check if token exists
     const token = localStorage.getItem('token');
     if (token) {
-        try {
-            // Decode JWT token
-            const base64Url = token.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(
-                window.atob(base64)
-                    .split('')
-                    .map(function(c) {
-                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                    })
-                    .join('')
-            );
-            
-            const payload = JSON.parse(jsonPayload);
-            
-            // Check if token is expired
-            if (payload.exp && payload.exp * 1000 < Date.now()) {
+        // Fetch full user data from backend to get is_admin, balance, etc.
+        fetch(`${API_URL}/users/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Token invalid');
+                }
+                return res.json();
+            })
+            .then(userData => {
+                callback({
+                    id: userData.id.toString(),
+                    username: userData.username,
+                    email: userData.email,
+                    createdAt: new Date(userData.created_at),
+                    authProvider: userData.auth_provider || 'local',
+                    balance: userData.balance || 0,
+                    is_admin: userData.is_admin || false
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching user data:', error);
                 localStorage.removeItem('token');
                 callback(null);
-                return () => {};
-            }
-            
-            callback({
-                id: "backend-id",
-                username: payload.sub,
-                createdAt: new Date(),
-                authProvider: 'local'
             });
-        } catch (error) {
-            console.error('Error decoding token:', error);
-            localStorage.removeItem('token');
-            callback(null);
-        }
     } else {
         callback(null);
     }
-    return () => {}; // Unsubscribe function
+    return () => { }; // Unsubscribe function
 };
 
 // --- CHATS ---
@@ -203,11 +196,11 @@ export const createNewSession = async (userId: string): Promise<ChatSession> => 
             headers: getAuthHeaders(),
             body: JSON.stringify({ title: "New Consultation" })
         });
-        
+
         if (!res.ok) {
             throw new Error('Failed to create session');
         }
-        
+
         const d = await res.json();
         return {
             id: d.id,
@@ -234,9 +227,9 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
 };
 
 export const sendMessageToBackend = async (
-    sessionId: string, 
-    message: string, 
-    language: Language, 
+    sessionId: string,
+    message: string,
+    language: Language,
     attachments: Attachment[]
 ): Promise<Message> => {
     try {
@@ -249,13 +242,13 @@ export const sendMessageToBackend = async (
                 attachments: attachments.length > 0 ? attachments : null
             })
         });
-        
+
         if (!res.ok) {
             const errorText = await res.text();
             console.error('Send message error:', errorText);
             throw new Error('Failed to send message');
         }
-        
+
         const d = await res.json();
         return {
             id: d.id.toString(),

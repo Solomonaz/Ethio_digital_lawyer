@@ -26,9 +26,12 @@ export interface GroundingSource {
 export interface User {
   id: string;
   username: string;
+  email?: string;
   // passwordHash removed - auth handled by Firebase
   createdAt: Date;
   authProvider: 'local' | 'google';
+  balance: number;
+  is_admin?: boolean;
 }
 
 export interface ChatSession {
