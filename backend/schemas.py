@@ -20,8 +20,10 @@ class GoogleLoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
     auth_provider: str
+    balance: float = 0.0
+    is_admin: bool = False
     
     class Config:
         from_attributes = True

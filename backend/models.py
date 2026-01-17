@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -14,6 +14,9 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     auth_provider = Column(String, default="local")  # 'local' or 'google'
     created_at = Column(DateTime, default=datetime.utcnow)
+    balance = Column(Float, default=0.0)  # User's account balance in ETB
+    is_admin = Column(Boolean, default=False)  # Admin flag
+    is_active = Column(Boolean, default=True)  # Account active status
     
     # Relationships
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
@@ -42,3 +45,25 @@ class ChatMessage(Base):
     
     # Relationships
     chat = relationship("Chat", back_populates="messages")
+
+class Payment(Base):
+    __tablename__ = "payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    tx_ref = Column(String, unique=True, nullable=False)
+    status = Column(String, default="pending")  # pending, success, failed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+
+class Setting(Base):
+    __tablename__ = "settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False)
+    value = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

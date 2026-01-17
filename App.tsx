@@ -3,6 +3,9 @@ import ChatMessage from './components/ChatMessage';
 import Sidebar from './components/Sidebar';
 import DisclaimerModal from './components/DisclaimerModal';
 import AuthModal from './components/AuthModal';
+import PaymentModal from './components/PaymentModal';
+import SuccessModal from './components/SuccessModal';
+import AdminDashboard from './components/AdminDashboard';
 // Removed direct geminiService import
 import { observeAuthState, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
 import { Message, Language, Attachment, User, ChatSession } from './types';
@@ -17,13 +20,29 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [successModal, setSuccessModal] = useState<{ open: boolean; amount?: number; message?: string }>({ open: false });
+  const [searchCost, setSearchCost] = useState(30);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,11 +55,52 @@ const App: React.FC = () => {
       setCurrentUser(user);
       if (user) {
         loadUserData(user.id);
-        setIsDisclaimerOpen(true);
+        if (!localStorage.getItem('disclaimerAccepted')) {
+          setIsDisclaimerOpen(true);
+        }
+        // Auto-show admin dashboard for admin users
+        if (user.is_admin) {
+          setShowAdminDashboard(true);
+        }
+
+        // Check for payment callback (Auto Top-up)
+        const urlParams = new URLSearchParams(window.location.search);
+        const txRef = urlParams.get('tx_ref');
+        if (txRef) {
+          const token = localStorage.getItem('token');
+          fetch(`http://127.0.0.1:8000/payment/verify/${txRef}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.status === 'success' || data.message === "Payment already verified") {
+                // Clear query params
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+                // Refresh user balance immediately
+                fetch('http://127.0.0.1:8000/users/me', {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+                  .then(r => r.json())
+                  .then(userData => {
+                    setCurrentUser(prev => prev ? { ...prev, balance: userData.balance } : null);
+                    setSuccessModal({ open: true, amount: userData.balance, message: "Your account has been successfully credited." });
+                  });
+              }
+            })
+            .catch(err => console.error("Verification failed", err));
+        }
+
+        // Fetch search cost
+        fetch('http://127.0.0.1:8000/settings/search-cost')
+          .then(res => res.json())
+          .then(data => setSearchCost(data.search_cost || 30))
+          .catch(() => setSearchCost(30));
       } else {
         setSessions([]);
         setCurrentSession(null);
         setMessages([]);
+        setShowAdminDashboard(false);
       }
       setIsAuthChecking(false);
     });
@@ -74,8 +134,8 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (user: User) => {
-      // Logic handled by observer
-      window.location.reload(); // Quick refresh to clear any stale state
+    // Logic handled by observer
+    window.location.reload(); // Quick refresh to clear any stale state
   };
 
   const handleLogout = async () => {
@@ -87,26 +147,26 @@ const App: React.FC = () => {
     if (!userId) return;
     setIsLoading(true);
     try {
-        const newSession = await createNewSession(userId);
-        
-        // Add local welcome message
-        const welcomeMsg: Message = {
-            id: 'welcome-' + Date.now(),
-            role: 'model',
-            text: UI_STRINGS[language].welcomeText,
-            timestamp: new Date()
-        };
-        newSession.messages = [welcomeMsg];
+      const newSession = await createNewSession(userId);
 
-        setCurrentSession(newSession);
-        setMessages([welcomeMsg]);
-        setSessions(prev => [newSession, ...prev]);
-        
-        if(window.innerWidth < 768) setIsSidebarOpen(false);
-    } catch(e) {
-        console.error("New chat error", e);
+      // Add local welcome message
+      const welcomeMsg: Message = {
+        id: 'welcome-' + Date.now(),
+        role: 'model',
+        text: UI_STRINGS[language].welcomeText,
+        timestamp: new Date()
+      };
+      newSession.messages = [welcomeMsg];
+
+      setCurrentSession(newSession);
+      setMessages([welcomeMsg]);
+      setSessions(prev => [newSession, ...prev]);
+
+      if (window.innerWidth < 768) setIsSidebarOpen(false);
+    } catch (e) {
+      console.error("New chat error", e);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -118,12 +178,12 @@ const App: React.FC = () => {
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (isRecording) stopListening();
-    
+
     if ((!input.trim() && attachments.length === 0) || isLoading || !currentSession || !currentUser) return;
 
     const userText = input.trim();
     const userAttachments = [...attachments];
-    
+
     setInput('');
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -143,13 +203,19 @@ const App: React.FC = () => {
     try {
       // Send to Backend (which saves to DB and calls Gemini)
       const botResponse = await sendMessageToBackend(currentSession.id, userText, language, userAttachments);
-      
+
       const finalMessages = [...updatedMessages, botResponse];
       setMessages(finalMessages);
-      
+
       // Update session list to reflect new title/time
       const updatedSessions = await getUserSessions(currentUser.id);
       setSessions(updatedSessions);
+
+      // Update current session title if it changed
+      const updatedCurrent = updatedSessions.find(s => s.id === currentSession.id);
+      if (updatedCurrent) {
+        setCurrentSession(prev => prev ? { ...prev, title: updatedCurrent.title } : null);
+      }
 
     } catch (error) {
       const errorMessage: Message = {
@@ -191,7 +257,7 @@ const App: React.FC = () => {
         };
         setAttachments(prev => [...prev, newAttachment]);
       } catch (error) {
-        alert("Failed to upload file");
+        setToast({ message: "Failed to upload file", type: 'error' });
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -205,7 +271,7 @@ const App: React.FC = () => {
     // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Browser not supported");
+      setToast({ message: "Browser not supported", type: 'error' });
       return;
     }
     const recognition = new SpeechRecognition();
@@ -235,22 +301,22 @@ const App: React.FC = () => {
   };
 
   const handleDeleteSessionTrigger = (sessionId: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      setSessionToDelete(sessionId);
-      setIsClearModalOpen(true);
+    e.stopPropagation();
+    setSessionToDelete(sessionId);
+    setIsClearModalOpen(true);
   };
 
   const confirmDeleteSession = async () => {
-      if (sessionToDelete) {
-          await deleteSession(sessionToDelete);
-          const updatedSessions = await getUserSessions(currentUser?.id || '');
-          setSessions(updatedSessions);
-          if (currentSession?.id === sessionToDelete) {
-             if(updatedSessions.length > 0) handleSelectSession(updatedSessions[0]);
-             else handleNewChat();
-          }
+    if (sessionToDelete) {
+      await deleteSession(sessionToDelete);
+      const updatedSessions = await getUserSessions(currentUser?.id || '');
+      setSessions(updatedSessions);
+      if (currentSession?.id === sessionToDelete) {
+        if (updatedSessions.length > 0) handleSelectSession(updatedSessions[0]);
+        else handleNewChat();
       }
-      setIsClearModalOpen(false);
+    }
+    setIsClearModalOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -268,31 +334,61 @@ const App: React.FC = () => {
 
   if (isAuthChecking) return <div className="flex h-screen items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
+
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-bounce-in ${toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-slate-800'} text-white`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          ) : toast.type === 'error' ? (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          )}
+          <span className="font-medium text-sm">{toast.message}</span>
+        </div>
+      )}
+
       {!currentUser && <AuthModal onLogin={handleLogin} language={language} onLanguageChange={setLanguage} />}
-      
+
+
       {currentUser && (
         <>
-        <DisclaimerModal isOpen={isDisclaimerOpen} onAccept={() => setIsDisclaimerOpen(false)} language={language} />
-        
-        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf" />
+          <SuccessModal
+            isOpen={successModal.open}
+            onClose={() => setSuccessModal({ open: false })}
+            amount={successModal.amount}
+            message={successModal.message}
+            title="Payment Successful!"
+          />
+          <DisclaimerModal
+            isOpen={isDisclaimerOpen}
+            onAccept={() => {
+              setIsDisclaimerOpen(false);
+              localStorage.setItem('disclaimerAccepted', 'true');
+            }}
+            language={language}
+          />
 
-        {isClearModalOpen && (
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf" />
+
+          {isClearModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
-                <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
-                    <h3 className="text-lg font-bold text-slate-900 mb-2">{t.clearChat}</h3>
-                    <p className="text-slate-600 mb-6">{t.clearChatConfirm}</p>
-                    <div className="flex space-x-3">
-                        <button onClick={() => setIsClearModalOpen(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">{t.cancel}</button>
-                        <button onClick={confirmDeleteSession} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">{t.confirm}</button>
-                    </div>
+              <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{t.clearChat}</h3>
+                <p className="text-slate-600 mb-6">{t.clearChatConfirm}</p>
+                <div className="flex space-x-3">
+                  <button onClick={() => setIsClearModalOpen(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">{t.cancel}</button>
+                  <button onClick={confirmDeleteSession} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">{t.confirm}</button>
                 </div>
+              </div>
             </div>
-        )}
+          )}
 
-        <Sidebar 
-            isOpen={isSidebarOpen} 
+          <Sidebar
+            isOpen={isSidebarOpen}
             toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             language={language}
             user={currentUser}
@@ -302,94 +398,125 @@ const App: React.FC = () => {
             onNewChat={() => handleNewChat()}
             onDeleteSession={handleDeleteSessionTrigger}
             onLogout={handleLogout}
-        />
+            onAddFunds={() => setIsPaymentModalOpen(true)}
+          />
 
-        <div className="flex-1 flex flex-col h-full relative">
+          <PaymentModal
+            isOpen={isPaymentModalOpen}
+            onClose={() => setIsPaymentModalOpen(false)}
+            language={language}
+            userEmail={currentUser?.email || currentUser?.username + '@ethiolex.com'}
+          />
+
+          <div className="flex-1 flex flex-col h-full relative">
             <header className="bg-white eth-gradient-border-b h-16 flex items-center justify-between px-4 md:px-8 shadow-sm flex-shrink-0 z-10">
-            <div className="flex items-center">
+              <div className="flex items-center">
                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden mr-4 text-slate-500 hover:text-slate-800">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
                 <h2 className="text-lg font-serif text-slate-900 font-bold md:hidden">EthioLex</h2>
                 <h2 className="hidden md:block eth-gradient-text font-serif text-lg font-bold">{t.appTagline}</h2>
-            </div>
-            <div className="flex items-center space-x-4">
+              </div>
+              <div className="flex items-center space-x-4">
+                {currentUser?.is_admin && (
+                  <button
+                    onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+                    className={`px-3 py-1 text-xs font-medium rounded-lg transition-all ${showAdminDashboard ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                  >
+                    {showAdminDashboard ? '← Back' : 'Admin'}
+                  </button>
+                )}
                 <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setLanguage('en')} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>English</button>
-                    <button onClick={() => setLanguage('am')} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${language === 'am' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>አማርኛ</button>
+                  <button onClick={() => setLanguage('en')} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${language === 'en' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>English</button>
+                  <button onClick={() => setLanguage('am')} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${language === 'am' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>አማርኛ</button>
                 </div>
-            </div>
+              </div>
             </header>
 
             <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
-            <div className="max-w-3xl mx-auto">
-                {messages.length === 0 ? <div className="h-full flex items-center justify-center"></div> : 
-                messages.map(msg => <ChatMessage key={msg.id} message={msg} language={language} />)}
-                
-                {isLoading && (
-                <div className="flex w-full mb-6 justify-start">
-                    <div className="flex items-center gap-3">
+              {showAdminDashboard ? (
+                <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+              ) : (
+                <div className="max-w-3xl mx-auto">
+                  {messages.length === 0 ? <div className="h-full flex items-center justify-center"></div> :
+                    messages.map(msg => <ChatMessage key={msg.id} message={msg} language={language} />)}
+
+                  {isLoading && (
+                    <div className="flex w-full mb-6 justify-start">
+                      <div className="flex items-center gap-3">
                         <div className="flex-shrink-0 h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
-                            <div className="w-full h-full flex flex-col opacity-90">
-                                <div className="flex-1 bg-green-600"></div>
-                                <div className="flex-1 bg-yellow-400"></div>
-                                <div className="flex-1 bg-red-600"></div>
-                            </div>
+                          <div className="w-full h-full flex flex-col opacity-90">
+                            <div className="flex-1 bg-green-600"></div>
+                            <div className="flex-1 bg-yellow-400"></div>
+                            <div className="flex-1 bg-red-600"></div>
+                          </div>
                         </div>
-                    <div className="bg-white border border-yellow-100 px-5 py-4 rounded-2xl rounded-tl-none shadow-sm flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                        <span className="text-xs text-slate-400 ml-2">{t.consulting}</span>
+                        <div className="bg-white border border-yellow-100 px-5 py-4 rounded-2xl rounded-tl-none shadow-sm flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          <span className="text-xs text-slate-400 ml-2">{t.consulting}</span>
+                        </div>
+                      </div>
                     </div>
-                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
+              )}
             </main>
 
             <div className="bg-white border-t border-slate-200 p-4 md:p-6 flex-shrink-0">
-            <div className="max-w-3xl mx-auto">
+              <div className="max-w-3xl mx-auto">
                 {attachments.length > 0 && (
-                    <div className="flex gap-2 mb-3 overflow-x-auto py-2">
-                        {attachments.map((att, index) => (
-                            <div key={index} className="relative group flex-shrink-0">
-                                {att.type === 'image' ? 
-                                    <img src={`data:${att.mimeType};base64,${att.data}`} className="h-20 w-20 object-cover rounded-lg border border-slate-300" alt="Preview" /> : 
-                                    <div className="h-20 w-20 bg-slate-100 rounded-lg border border-slate-300 flex flex-col items-center justify-center px-1">
-                                        <span className="text-[10px] text-slate-500 w-full truncate text-center">{att.name}</span>
-                                    </div>
-                                }
-                                <button onClick={() => removeAttachment(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600">
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            </div>
-                        ))}
-                    </div>
+                  <div className="flex gap-2 mb-3 overflow-x-auto py-2">
+                    {attachments.map((att, index) => (
+                      <div key={index} className="relative group flex-shrink-0">
+                        {att.type === 'image' ?
+                          <img src={`data:${att.mimeType};base64,${att.data}`} className="h-20 w-20 object-cover rounded-lg border border-slate-300" alt="Preview" /> :
+                          <div className="h-20 w-20 bg-slate-100 rounded-lg border border-slate-300 flex flex-col items-center justify-center px-1">
+                            <span className="text-[10px] text-slate-500 w-full truncate text-center">{att.name}</span>
+                          </div>
+                        }
+                        <button onClick={() => removeAttachment(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
 
-                <div className={`relative flex items-end gap-2 bg-slate-50 border rounded-xl p-2 focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent transition-all shadow-sm ${isRecording ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-300'}`}>
-                <button onClick={() => fileInputRef.current?.click()} className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors mb-0.5" disabled={isRecording}>
+                {/* Insufficient Balance Warning */}
+                {currentUser && (currentUser.balance || 0) < searchCost && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-red-600">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                      <span className="text-sm font-medium">Insufficient balance. Recharge to continue consulting.</span>
+                    </div>
+                    <button onClick={() => setIsPaymentModalOpen(true)} className="bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-red-700">Add Funds</button>
+                  </div>
+                )}
+
+                <div className={`relative flex items-end gap-2 bg-slate-50 border rounded-xl p-2 focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent transition-all shadow-sm ${isRecording ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-300'} ${currentUser && (currentUser.balance || 0) < searchCost ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <button onClick={() => fileInputRef.current?.click()} className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors mb-0.5" disabled={isRecording || (currentUser && (currentUser.balance || 0) < searchCost)}>
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
-                </button>
+                  </button>
 
-                <button onClick={isRecording ? stopListening : startListening} className={`p-2.5 rounded-lg transition-all mb-0.5 ${isRecording ? 'bg-red-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'}`}>
-                    {isRecording ? <div className="w-5 h-5 flex items-center justify-center"><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg></div> : 
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>}
-                </button>
+                  <button onClick={isRecording ? stopListening : startListening} className={`p-2.5 rounded-lg transition-all mb-0.5 ${isRecording ? 'bg-red-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'}`} disabled={currentUser && (currentUser.balance || 0) < searchCost}>
+                    {isRecording ? <div className="w-5 h-5 flex items-center justify-center"><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg></div> :
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>}
+                  </button>
 
-                <textarea ref={textareaRef} value={input} onChange={adjustTextareaHeight} onKeyDown={handleKeyDown} placeholder={isRecording ? t.listening : t.inputPlaceholder} className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-2.5 px-2 text-slate-800 placeholder-slate-400" rows={1} disabled={isLoading} />
-                <button onClick={() => handleSendMessage()} disabled={isLoading || (!input.trim() && attachments.length === 0)} className={`p-2.5 rounded-lg mb-0.5 transition-colors duration-200 flex-shrink-0 ${isLoading || (!input.trim() && attachments.length === 0) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md'}`}>
+                  <textarea ref={textareaRef} value={input} onChange={adjustTextareaHeight} onKeyDown={handleKeyDown} placeholder={currentUser && (currentUser.balance || 0) < searchCost ? `Insufficient balance (${searchCost} ETB required)` : (isRecording ? t.listening : t.inputPlaceholder)} className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-2.5 px-2 text-slate-800 placeholder-slate-400" rows={1} disabled={isLoading || (currentUser && (currentUser.balance || 0) < searchCost)} />
+                  <button onClick={() => handleSendMessage()} disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < searchCost)} className={`p-2.5 rounded-lg mb-0.5 transition-colors duration-200 flex-shrink-0 ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < searchCost) ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md'}`}>
                     <svg className="w-5 h-5 transform rotate-90" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
-                </button>
+                  </button>
                 </div>
                 <p className="text-center text-[10px] text-slate-400 mt-2"> <span className="text-red-400">{t.disclaimerText.split('.')[0]}.</span></p>
+              </div>
             </div>
-            </div>
-        </div>
+          </div>
         </>
       )}
     </div>

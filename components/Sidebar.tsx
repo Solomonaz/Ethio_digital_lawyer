@@ -14,19 +14,21 @@ interface SidebarProps {
   onNewChat: () => void;
   onDeleteSession: (sessionId: string, e: React.MouseEvent) => void;
   onLogout: () => void;
+  onAddFunds: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  isOpen, 
-  toggleSidebar, 
-  language, 
+const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  toggleSidebar,
+  language,
   user,
   sessions,
   currentSessionId,
   onSelectSession,
   onNewChat,
   onDeleteSession,
-  onLogout
+  onLogout,
+  onAddFunds
 }) => {
   const t = UI_STRINGS[language];
 
@@ -44,9 +46,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     ];
 
     sessions.forEach(session => {
+      // Filter out empty "New Consultation" sessions unless it's the current one
+      if (session.title === 'New Consultation' && session.messages.length === 0 && session.id !== currentSessionId) {
+        return;
+      }
+
       // Handle Firebase Timestamp conversion edge case if it slipped through props
       const date = new Date(session.updatedAt);
-      
+
       if (date.toDateString() === today.toDateString()) {
         groups[0].items.push(session);
       } else if (date.toDateString() === yesterday.toDateString()) {
@@ -67,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* Mobile Backdrop */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
           onClick={toggleSidebar}
         />
@@ -75,32 +82,32 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Container */}
       <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-slate-950 text-slate-100 transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        
+
         {/* Header */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-600 via-yellow-400 to-red-600"></div>
-          
+
           <div className="flex items-center space-x-3 pt-1">
-             {/* Justice Scale Logo - Ethiopian Colors */}
-             <div className="w-8 h-8 flex items-center justify-center">
-               <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor">
-                 {/* Scale Beam */}
-                 <path d="M4 7h16" stroke="#FEDD00" strokeWidth="2" strokeLinecap="round"/>
-                 <path d="M12 3v13" stroke="#FEDD00" strokeWidth="2" strokeLinecap="round"/>
-                 
-                 {/* Left Pan */}
-                 <path d="M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7" stroke="#009A44" strokeWidth="1.5" fill="none"/>
-                 <path d="M6 7l3 5 3-5" stroke="#009A44" strokeWidth="1" opacity="0.5"/>
+            {/* Justice Scale Logo - Ethiopian Colors */}
+            <div className="w-8 h-8 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="currentColor">
+                {/* Scale Beam */}
+                <path d="M4 7h16" stroke="#FEDD00" strokeWidth="2" strokeLinecap="round" />
+                <path d="M12 3v13" stroke="#FEDD00" strokeWidth="2" strokeLinecap="round" />
 
-                 {/* Right Pan */}
-                 <path d="M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7" stroke="#FF0000" strokeWidth="1.5" fill="none"/>
-                 <path d="M16 7l3 5 3-5" stroke="#FF0000" strokeWidth="1" opacity="0.5"/>
+                {/* Left Pan */}
+                <path d="M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7" stroke="#009A44" strokeWidth="1.5" fill="none" />
+                <path d="M6 7l3 5 3-5" stroke="#009A44" strokeWidth="1" opacity="0.5" />
 
-                 {/* Base */}
-                 <path d="M8 21h8" stroke="#FEDD00" strokeWidth="2" strokeLinecap="round"/>
-                 <path d="M12 16l-3 5h6l-3-5" stroke="#FEDD00" strokeWidth="1.5" fill="none"/>
-               </svg>
-             </div>
+                {/* Right Pan */}
+                <path d="M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7" stroke="#FF0000" strokeWidth="1.5" fill="none" />
+                <path d="M16 7l3 5 3-5" stroke="#FF0000" strokeWidth="1" opacity="0.5" />
+
+                {/* Base */}
+                <path d="M8 21h8" stroke="#FEDD00" strokeWidth="2" strokeLinecap="round" />
+                <path d="M12 16l-3 5h6l-3-5" stroke="#FEDD00" strokeWidth="1.5" fill="none" />
+              </svg>
+            </div>
             <span className="font-serif font-bold text-lg tracking-tight text-white">{APP_NAME}</span>
           </div>
           <button onClick={toggleSidebar} className="md:hidden text-slate-400 hover:text-white">
@@ -112,85 +119,111 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* New Chat Button */}
         <div className="p-4">
-            <button 
-                onClick={() => {
-                    onNewChat();
-                    if(window.innerWidth < 768) toggleSidebar();
-                }}
-                className="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-lg border border-slate-700 transition-all shadow-sm group"
-            >
-                <svg className="w-5 h-5 text-yellow-400 group-hover:text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="font-medium text-sm">{t.newChat}</span>
-            </button>
+          <button
+            onClick={() => {
+              onNewChat();
+              if (window.innerWidth < 768) toggleSidebar();
+            }}
+            className="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-lg border border-slate-700 transition-all shadow-sm group"
+          >
+            <svg className="w-5 h-5 text-yellow-400 group-hover:text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="font-medium text-sm">{t.newChat}</span>
+          </button>
         </div>
 
         {/* History List */}
         <div className="flex-1 overflow-y-auto px-2 space-y-6 scrollbar-thin scrollbar-thumb-slate-700">
           {sessions.length === 0 ? (
-              <div className="text-center mt-10 px-4">
-                  <p className="text-slate-500 text-sm italic">{t.noHistory}</p>
-              </div>
+            <div className="text-center mt-10 px-4">
+              <p className="text-slate-500 text-sm italic">{t.noHistory}</p>
+            </div>
           ) : (
             sessionGroups.map((group, gIndex) => (
-                <div key={gIndex}>
-                    <h3 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-2">{group.label}</h3>
-                    <div className="space-y-1">
-                        {group.items.map((session) => (
-                            <div 
-                                key={session.id}
-                                className={`group relative flex items-center rounded-lg px-3 py-2 cursor-pointer transition-colors ${currentSessionId === session.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}
-                                onClick={() => {
-                                    onSelectSession(session);
-                                    if(window.innerWidth < 768) toggleSidebar();
-                                }}
-                            >
-                                <div className="flex-1 truncate text-sm">
-                                    {session.title}
-                                </div>
-                                
-                                {/* Delete Action */}
-                                <button 
-                                    onClick={(e) => onDeleteSession(session.id, e)}
-                                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
-                                    title={t.clearChat}
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                </button>
-                            </div>
-                        ))}
+              <div key={gIndex}>
+                <h3 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-2">{group.label}</h3>
+                <div className="space-y-1">
+                  {group.items.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`group relative flex items-center rounded-lg px-3 py-2 cursor-pointer transition-colors ${currentSessionId === session.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}
+                      onClick={() => {
+                        onSelectSession(session);
+                        if (window.innerWidth < 768) toggleSidebar();
+                      }}
+                    >
+                      <div className="flex-1 truncate text-sm">
+                        {session.title}
+                      </div>
+
+                      {/* Delete Action */}
+                      <button
+                        onClick={(e) => onDeleteSession(session.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
+                        title={t.clearChat}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
+                  ))}
                 </div>
+              </div>
             ))
           )}
         </div>
 
         {/* User Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-900">
-           {user && (
-               <div className="flex items-center justify-between mb-3">
-                   <div className="flex items-center space-x-2">
-                       <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-green-600 to-yellow-500 flex items-center justify-center text-xs font-bold text-white shadow-lg">
-                           {user.username.charAt(0).toUpperCase()}
-                       </div>
-                       <div className="flex flex-col">
-                           <span className="text-sm font-medium text-white">{user.username}</span>
-                           <span className="text-[10px] text-slate-400">{t.freeAccount}</span>
-                       </div>
-                   </div>
-                   <button onClick={onLogout} className="text-slate-400 hover:text-white" title={t.logout}>
-                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                       </svg>
-                   </button>
-               </div>
-           )}
-          
+          {user && (
+            <div className="space-y-3 mb-3">
+              {/* User Info Row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-green-600 to-yellow-500 flex items-center justify-center text-xs font-bold text-white shadow-lg">
+                    {user.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-white">{user.username}</span>
+                    <span className="text-[10px] text-slate-400">Basic Plan</span>
+                  </div>
+                </div>
+                <button onClick={onLogout} className="text-slate-400 hover:text-white" title={t.logout}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Balance Section */}
+              <div className="flex items-center justify-between bg-slate-950 rounded-lg p-3 border border-slate-800">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-widest">Balance</span>
+                  <div className="flex items-end">
+                    <span className={`text-lg font-bold ${(user.balance || 0) < 30 ? 'text-red-400' : 'text-green-400'}`}>
+                      {(user.balance || 0).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-slate-500 ml-1 mb-0.5">ETB</span>
+                  </div>
+                </div>
+                <button
+                  onClick={onAddFunds}
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shadow-md"
+                  title="Add Funds"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Add Funds
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="text-[10px] text-slate-500 text-center">
-             &copy; {new Date().getFullYear()} EthioLex Digital Lawyer
+            &copy; {new Date().getFullYear()} EthioLex Digital Lawyer
           </div>
         </div>
       </div>
