@@ -145,7 +145,8 @@ export const observeAuthState = (callback: (user: User | null) => void) => {
                     createdAt: new Date(userData.created_at),
                     authProvider: userData.auth_provider || 'local',
                     balance: userData.balance || 0,
-                    is_admin: userData.is_admin || false
+                    is_admin: userData.is_admin || false,
+                    is_verified: userData.is_verified || false
                 });
             })
             .catch(error => {
@@ -157,6 +158,38 @@ export const observeAuthState = (callback: (user: User | null) => void) => {
         callback(null);
     }
     return () => { }; // Unsubscribe function
+};
+
+// --- PHONE VERIFICATION ---
+
+export const requestVerificationCode = async (phoneNumber: string): Promise<{ message: string; expires_in: number }> => {
+    const res = await fetch(`${API_URL}/auth/request-verification`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ phone_number: phoneNumber })
+    });
+
+    if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Failed to send verification code');
+    }
+
+    return res.json();
+};
+
+export const verifyPhoneCode = async (phoneNumber: string, code: string): Promise<{ message: string; is_verified: boolean }> => {
+    const res = await fetch(`${API_URL}/auth/verify-phone`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ phone_number: phoneNumber, code })
+    });
+
+    if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Verification failed');
+    }
+
+    return res.json();
 };
 
 // --- CHATS ---

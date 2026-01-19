@@ -18,6 +18,11 @@ class User(Base):
     is_admin = Column(Boolean, default=False)  # Admin flag
     is_active = Column(Boolean, default=True)  # Account active status
     
+    # Phone Verification Fields
+    is_verified = Column(Boolean, default=False)  # Phone verified status
+    verification_code = Column(String, nullable=True)  # 6-digit code
+    verification_code_expires = Column(DateTime, nullable=True)  # Code expiry time
+    
     # Relationships
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
 

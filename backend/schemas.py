@@ -34,6 +34,14 @@ class Token(BaseModel):
     user_id: int
     username: str
 
+# --- Phone Verification Schemas ---
+class RequestVerificationCode(BaseModel):
+    phone_number: str
+
+class VerifyPhoneCode(BaseModel):
+    phone_number: str
+    code: str
+
 # --- Chat Schemas ---
 class ChatCreate(BaseModel):
     title: str = "New Consultation"
