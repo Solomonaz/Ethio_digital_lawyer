@@ -216,10 +216,86 @@ async def google_login(google_data: dict, db: Session = Depends(get_db)):
         "username": user.username
     }
 
-@app.get("/users/me", response_model=UserResponse)
+@app.get("/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
-    return current_user
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "name": current_user.name,
+        "email": current_user.email,
+        "phone_number": current_user.phone_number,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "auth_provider": current_user.auth_provider,
+        "balance": current_user.balance,
+        "is_admin": current_user.is_admin,
+        "is_verified": current_user.is_verified
+    }
+
+# --- PHONE VERIFICATION ENDPOINTS ---
+from services.telegram_service import TelegramService
+from schemas import RequestVerificationCode, VerifyPhoneCode
+import random
+from datetime import timedelta
+
+@app.post("/auth/request-verification")
+async def request_verification_code(
+    data: RequestVerificationCode,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Request a verification code to be sent via Telegram"""
+    phone_number = data.phone_number.strip()
+    
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Phone number is required")
+    
+    # Generate 6-digit code
+    code = str(random.randint(100000, 999999))
+    
+    # Set expiry (5 minutes from now)
+    expires_at = datetime.utcnow() + timedelta(minutes=5)
+    
+    # Store code in user record
+    current_user.phone_number = phone_number
+    current_user.verification_code = code
+    current_user.verification_code_expires = expires_at
+    db.commit()
+    
+    # Send code via Telegram
+    success = TelegramService.send_verification_code(phone_number, code)
+    
+    if success:
+        return {"message": "Verification code sent successfully", "expires_in": 300}
+    else:
+        # Still return success for dev mode (code printed to console)
+        return {"message": "Verification code sent (check console if in dev mode)", "expires_in": 300}
+
+@app.post("/auth/verify-phone")
+async def verify_phone_code(
+    data: VerifyPhoneCode,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Verify the phone number with the code"""
+    if not current_user.verification_code:
+        raise HTTPException(status_code=400, detail="No verification code requested")
+    
+    # Check expiry
+    if current_user.verification_code_expires and datetime.utcnow() > current_user.verification_code_expires:
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+    
+    # Check code
+    if current_user.verification_code != data.code.strip():
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    # Mark as verified
+    current_user.is_verified = True
+    current_user.verification_code = None
+    current_user.verification_code_expires = None
+    db.commit()
+    
+    return {"message": "Phone number verified successfully", "is_verified": True}
 
 # --- PAYMENT ENDPOINTS ---
 from services.chapa_service import ChapaService

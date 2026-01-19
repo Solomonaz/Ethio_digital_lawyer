@@ -32,6 +32,7 @@ export interface User {
   authProvider: 'local' | 'google';
   balance: number;
   is_admin?: boolean;
+  is_verified?: boolean;
 }
 
 export interface ChatSession {
