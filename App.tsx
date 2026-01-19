@@ -165,11 +165,22 @@ const App: React.FC = () => {
     setMessages(session.messages);
   };
 
+  // Calculate free search status
+  const totalUserMessages = sessions.reduce((acc, session) =>
+    acc + session.messages.filter(m => m.role === 'user').length, 0
+  );
+  const sessionIsFree = totalUserMessages < 2;
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (isRecording) stopListening();
 
     if ((!input.trim() && attachments.length === 0) || isLoading || !currentSession || !currentUser) return;
+
+    if (!sessionIsFree && (currentUser.balance || 0) < searchCost) {
+      setToast({ message: "Insufficient balance. Please recharge.", type: 'error' });
+      return;
+    }
 
     const userText = input.trim();
     const userAttachments = [...attachments];
@@ -200,7 +211,25 @@ const App: React.FC = () => {
       if (updatedCurrent) {
         setCurrentSession(prev => prev ? { ...prev, title: updatedCurrent.title } : null);
       }
-    } catch (error) {
+
+      // Update user balance if not free search (optimistic update or fetch from backend)
+      if (!sessionIsFree) {
+        fetch('http://127.0.0.1:8000/users/me', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+          .then(r => r.json())
+          .then(userData => {
+            setCurrentUser(prev => prev ? { ...prev, balance: userData.balance } : null);
+          });
+      }
+
+    } catch (error: any) {
+      // Check if it's an insufficient balance error from backend (402)
+      if (error.message && error.message.includes("Insufficient balance")) {
+        setToast({ message: "Insufficient balance. Please recharge.", type: 'error' });
+        setIsPaymentModalOpen(true);
+      }
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
@@ -635,7 +664,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Insufficient Balance Warning */}
-                {currentUser && (currentUser.balance || 0) < searchCost && (
+                {currentUser && (currentUser.balance || 0) < searchCost && sessionIsFree === false && (
                   <div className="mb-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 border border-red-100 rounded-2xl flex items-center justify-between gap-4 animate-slide-up">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -661,13 +690,13 @@ const App: React.FC = () => {
                 <div className={`relative flex items-end gap-2 bg-white border-2 rounded-2xl p-2 transition-all shadow-lg ${isRecording
                   ? 'border-red-300 ring-4 ring-red-100'
                   : 'border-slate-200 focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-100'
-                  } ${currentUser && (currentUser.balance || 0) < searchCost ? 'opacity-50 pointer-events-none' : ''}`}>
+                  } ${currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree ? 'opacity-50 pointer-events-none' : ''}`}>
 
                   {/* Attachment Button */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="p-3 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all disabled:opacity-50"
-                    disabled={isRecording || (currentUser && (currentUser.balance || 0) < searchCost)}
+                    disabled={isRecording || (currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree)}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -681,7 +710,7 @@ const App: React.FC = () => {
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
                       : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
                       }`}
-                    disabled={currentUser && (currentUser.balance || 0) < searchCost}
+                    disabled={currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree}
                   >
                     {isRecording ? (
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -701,7 +730,7 @@ const App: React.FC = () => {
                     onChange={adjustTextareaHeight}
                     onKeyDown={handleKeyDown}
                     placeholder={
-                      currentUser && (currentUser.balance || 0) < searchCost
+                      currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree
                         ? `Insufficient balance (${searchCost} ETB required)`
                         : isRecording
                           ? t.listening
@@ -709,14 +738,14 @@ const App: React.FC = () => {
                     }
                     className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-3 px-2 text-slate-800 placeholder-slate-400 text-sm outline-none"
                     rows={1}
-                    disabled={isLoading || (currentUser && (currentUser.balance || 0) < searchCost)}
+                    disabled={isLoading || (currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree)}
                   />
 
                   {/* Send Button */}
                   <button
                     onClick={() => handleSendMessage()}
-                    disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < searchCost)}
-                    className={`p-3 rounded-xl transition-all ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < searchCost)
+                    disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree)}
+                    className={`p-3 rounded-xl transition-all ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree)
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:from-emerald-500 hover:to-emerald-400'
                       }`}

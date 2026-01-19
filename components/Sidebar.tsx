@@ -171,8 +171,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div
                           key={session.id}
                           className={`group relative flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200 ${currentSessionId === session.id
-                              ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 border border-emerald-500/20 text-white'
-                              : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                            ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 border border-emerald-500/20 text-white'
+                            : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                             }`}
                           onClick={() => {
                             onSelectSession(session);

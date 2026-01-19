@@ -125,8 +125,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                                 key={item.value}
                                 onClick={() => setAmount(item.value)}
                                 className={`relative py-3 rounded-xl text-center transition-all ${amount === item.value
-                                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30 scale-105'
-                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30 scale-105'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                     }`}
                             >
                                 <span className="text-sm font-bold">{item.label}</span>
@@ -154,8 +154,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                         onClick={handlePayment}
                         disabled={isLoading || Number(amount) < 30}
                         className={`w-full py-4 rounded-2xl font-bold text-base shadow-lg transition-all transform active:scale-[0.98] ${isLoading || Number(amount) < 30
-                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-500/30 hover:shadow-emerald-500/40 hover:-translate-y-0.5'
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-500/30 hover:shadow-emerald-500/40 hover:-translate-y-0.5'
                             }`}
                     >
                         {isLoading ? (

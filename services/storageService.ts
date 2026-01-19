@@ -31,7 +31,8 @@ export const registerUser = async (name: string, email: string, phoneNumber: str
             id: data.user_id.toString(),
             username: data.username,
             createdAt: new Date(),
-            authProvider: 'local'
+            authProvider: 'local',
+            balance: 0
         };
     } catch (error: any) {
         console.error('Registration error:', error);
@@ -59,7 +60,8 @@ export const loginUser = async (email: string, password: string): Promise<User> 
             id: data.user_id.toString(),
             username: data.username,
             createdAt: new Date(),
-            authProvider: 'local'
+            authProvider: 'local',
+            balance: 0
         };
     } catch (error: any) {
         console.error('Login error:', error);
@@ -105,7 +107,8 @@ export const loginWithGoogle = async (): Promise<User> => {
             id: data.user_id.toString(),
             username: data.username,
             createdAt: new Date(),
-            authProvider: 'google'
+            authProvider: 'google',
+            balance: 0
         };
     } catch (error: any) {
         console.error('Google login error:', error);
@@ -181,7 +184,7 @@ export const getUserSessions = async (userId: string): Promise<ChatSession[]> =>
                 text: m.content,
                 timestamp: new Date(m.timestamp)
             })),
-            updatedAt: new Date(d.updated_at)
+            updatedAt: d.updated_at ? new Date(d.updated_at) : new Date()
         }));
     } catch (error) {
         console.error('Error getting sessions:', error);
