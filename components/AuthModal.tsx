@@ -94,8 +94,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
                 <button
                   onClick={() => onLanguageChange('en')}
                   className={`px-2.5 sm:px-4 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full transition-all duration-300 ${language === 'en'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
                   EN
@@ -103,8 +103,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
                 <button
                   onClick={() => onLanguageChange('am')}
                   className={`px-2.5 sm:px-4 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full transition-all duration-300 ${language === 'am'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
                     }`}
                 >
                   አማ
@@ -132,8 +132,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
               <button
                 onClick={() => view !== 'login' && switchView()}
                 className={`flex-1 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-full transition-all duration-300 ${view === 'login'
-                    ? 'bg-white text-slate-900 shadow-md'
-                    : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white text-slate-900 shadow-md'
+                  : 'text-slate-500 hover:text-slate-700'
                   }`}
               >
                 {t.login}
@@ -141,8 +141,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
               <button
                 onClick={() => view !== 'signup' && switchView()}
                 className={`flex-1 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-full transition-all duration-300 ${view === 'signup'
-                    ? 'bg-white text-slate-900 shadow-md'
-                    : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white text-slate-900 shadow-md'
+                  : 'text-slate-500 hover:text-slate-700'
                   }`}
               >
                 {t.signup}

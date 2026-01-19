@@ -415,18 +415,29 @@ async def send_message(
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
     
-    # Check User Balance (Cost from settings)
-    search_cost = get_search_cost(db)
-    if current_user.balance < search_cost:
-        raise HTTPException(
-            status_code=402,  # Payment Required
-            detail=f"Insufficient balance. Your current balance is {current_user.balance:.2f} ETB. A search costs {search_cost:.2f} ETB. Please recharge to continue."
-        )
+    # Check total messages sent by user to determine if it's a free search
+    # Join ChatMessage with Chat to filter by current user
+    user_message_count = db.query(ChatMessage).join(Chat).filter(
+        Chat.user_id == current_user.id,
+        ChatMessage.role == "user"
+    ).count()
+
+    # Free Search Logic (First 2 searches are free)
+    is_free_search = user_message_count < 2
     
-    # Deduct Search Cost
-    current_user.balance -= search_cost
-    db.commit()
-    db.refresh(current_user)
+    if not is_free_search:
+        # Check User Balance (Cost from settings)
+        search_cost = get_search_cost(db)
+        if current_user.balance < search_cost:
+            raise HTTPException(
+                status_code=402,  # Payment Required
+                detail=f"Insufficient balance. Your current balance is {current_user.balance:.2f} ETB. A search costs {search_cost:.2f} ETB. Please recharge to continue."
+            )
+        
+        # Deduct Search Cost
+        current_user.balance -= search_cost
+        db.commit()
+        db.refresh(current_user)
     
     # Check if this is the first message and update title
     existing_messages_count = db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).count()
@@ -472,6 +483,11 @@ async def send_message(
         
         # Handle attachments if present
         parts = [message_data.message]
+        
+        # Apply Free Search Limitation
+        if is_free_search:
+            parts[0] += "\n\nIMPORTANT: This is a free trial search. You MUST LIMIT your response. Only provide the relevant legal Article(s) and a very brief explanation. Do NOT provide a robust detailed analysis. END the response with this exact caption: '\n\n*This is a limited free search. Please recharge your account for a robust and complete response.*'"
+
         if message_data.attachments:
             for attachment in message_data.attachments:
                 if attachment["type"] == "image":
@@ -490,7 +506,7 @@ async def send_message(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
-            # max_output_tokens=2048,
+            max_output_tokens=2048,
         )
         
         # Send message

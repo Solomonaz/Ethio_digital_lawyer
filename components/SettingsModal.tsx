@@ -74,8 +74,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
                             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === tab.id
-                                    ? 'border-emerald-500 text-emerald-600'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                ? 'border-emerald-500 text-emerald-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700'
                                 }`}
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -246,8 +246,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <button
                                         onClick={() => onLanguageChange('en')}
                                         className={`p-4 rounded-xl border-2 transition-all ${language === 'en'
-                                                ? 'border-emerald-500 bg-emerald-50'
-                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                            ? 'border-emerald-500 bg-emerald-50'
+                                            : 'border-slate-200 bg-white hover:border-slate-300'
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
@@ -268,8 +268,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <button
                                         onClick={() => onLanguageChange('am')}
                                         className={`p-4 rounded-xl border-2 transition-all ${language === 'am'
-                                                ? 'border-emerald-500 bg-emerald-50'
-                                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                            ? 'border-emerald-500 bg-emerald-50'
+                                            : 'border-slate-200 bg-white hover:border-slate-300'
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
