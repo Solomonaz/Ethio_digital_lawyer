@@ -72,7 +72,11 @@ export const UI_STRINGS: Record<Language, Record<string, string>> = {
     resources: "Resources",
     listening: "Listening... (Speak now)",
     uploadFile: "Upload File",
-    stopRecording: "Stop & Convert to Text"
+    stopRecording: "Stop & Convert to Text",
+    settings: "Settings",
+    balance: "Balance",
+    addFunds: "Add Funds",
+    language: "Language"
   },
   am: {
     // App
@@ -120,6 +124,10 @@ export const UI_STRINGS: Record<Language, Record<string, string>> = {
     resources: "ጠቃሚ ምንጮች",
     listening: "እየሰማሁ ነው... (ይናገሩ)",
     uploadFile: "ፋይል ስቀል",
-    stopRecording: "አቁም እና ወደ ጽሁፍ ቀይር"
+    stopRecording: "አቁም እና ወደ ጽሁፍ ቀይር",
+    settings: "ቅንብሮች",
+    balance: "ቀሪ ሂሳብ",
+    addFunds: "ገንዘብ አክል",
+    language: "ቋንቋ"
   }
 };

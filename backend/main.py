@@ -458,6 +458,7 @@ async def send_message(
             
         model = genai.GenerativeModel(
             model_name="gemini-3-pro-preview",
+            # model_name="gemini-2.5-flash",
             system_instruction=SYSTEM_INSTRUCTION
         )
         
@@ -489,7 +490,7 @@ async def send_message(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
-            max_output_tokens=2048,
+            # max_output_tokens=2048,
         )
         
         # Send message
