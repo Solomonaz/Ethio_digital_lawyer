@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language, User } from '../types';
 import { UI_STRINGS } from '../constants';
 
@@ -21,8 +21,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onAddFunds,
     onLogout
 }) => {
-    const [activeTab, setActiveTab] = useState<'account' | 'billing' | 'preferences'>('account');
+    const [activeTab, setActiveTab] = useState<'account' | 'billing'>('account');
+    const [searchCost, setSearchCost] = useState<number>(0);
     const t = UI_STRINGS[language];
+
+    // Fetch search cost from backend
+    useEffect(() => {
+        const fetchSearchCost = async () => {
+            try {
+                const response = await fetch('http://localhost:8000/settings/search-cost');
+                if (response.ok) {
+                    const data = await response.json();
+                    setSearchCost(data.search_cost);
+                }
+            } catch (error) {
+                console.error('Failed to fetch search cost:', error);
+                setSearchCost(30); // Default fallback
+            }
+        };
+        if (isOpen) {
+            fetchSearchCost();
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -67,8 +87,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex border-b border-slate-200 px-6">
                     {[
                         { id: 'account', label: 'Account', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-                        { id: 'billing', label: 'Billing', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
-                        { id: 'preferences', label: 'Preferences', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' }
+                        { id: 'billing', label: 'Billing', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' }
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -202,116 +221,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-medium text-amber-800">100 ETB per query</p>
-                                            <p className="text-sm text-amber-700 mt-1">Each legal consultation message costs 100 Ethiopian Birr. Make sure you have sufficient balance before asking questions.</p>
+                                            <p className="text-sm font-medium text-amber-800">{searchCost} ETB per query</p>
+                                            <p className="text-sm text-amber-700 mt-1">Each legal consultation message costs {searchCost} Ethiopian Birr. Make sure you have sufficient balance before asking questions.</p>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            {/* Quick Add Options */}
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Quick Add</h4>
-                                <div className="grid grid-cols-3 gap-3">
-                                    {[
-                                        { amount: 500, queries: 5 },
-                                        { amount: 1000, queries: 10 },
-                                        { amount: 2000, queries: 20 }
-                                    ].map((option) => (
-                                        <button
-                                            key={option.amount}
-                                            onClick={() => {
-                                                onAddFunds();
-                                                onClose();
-                                            }}
-                                            className="p-4 rounded-xl bg-white border-2 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all text-center group"
-                                        >
-                                            <p className="text-lg font-bold text-slate-900 group-hover:text-emerald-600">{option.amount}</p>
-                                            <p className="text-xs text-slate-500">ETB</p>
-                                            <p className="text-[10px] text-emerald-600 mt-1">{option.queries} queries</p>
-                                        </button>
-                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Preferences Tab */}
-                    {activeTab === 'preferences' && (
-                        <div className="space-y-6">
-                            {/* Language */}
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t.language}</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        onClick={() => onLanguageChange('en')}
-                                        className={`p-4 rounded-xl border-2 transition-all ${language === 'en'
-                                            ? 'border-emerald-500 bg-emerald-50'
-                                            : 'border-slate-200 bg-white hover:border-slate-300'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">🇺🇸</span>
-                                            <div className="text-left">
-                                                <p className={`text-sm font-medium ${language === 'en' ? 'text-emerald-700' : 'text-slate-900'}`}>English</p>
-                                                <p className="text-xs text-slate-500">English</p>
-                                            </div>
-                                        </div>
-                                        {language === 'en' && (
-                                            <div className="flex justify-end mt-2">
-                                                <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={() => onLanguageChange('am')}
-                                        className={`p-4 rounded-xl border-2 transition-all ${language === 'am'
-                                            ? 'border-emerald-500 bg-emerald-50'
-                                            : 'border-slate-200 bg-white hover:border-slate-300'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">🇪🇹</span>
-                                            <div className="text-left">
-                                                <p className={`text-sm font-medium ${language === 'am' ? 'text-emerald-700' : 'text-slate-900'}`}>አማርኛ</p>
-                                                <p className="text-xs text-slate-500">Amharic</p>
-                                            </div>
-                                        </div>
-                                        {language === 'am' && (
-                                            <div className="flex justify-end mt-2">
-                                                <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
 
-                            {/* About */}
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">About</h4>
-                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                                            <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="white" strokeWidth="1.5">
-                                                <path d="M12 3v13M4 7h16M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M8 21h8M12 16l-3 5h6l-3-5" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-slate-900">EthioLex</p>
-                                            <p className="text-xs text-slate-500">Version 1.0.0</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-sm text-slate-600">
-                                        Your AI-powered Ethiopian legal assistant. Get expert guidance on Ethiopian law, legal procedures, and regulations.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
