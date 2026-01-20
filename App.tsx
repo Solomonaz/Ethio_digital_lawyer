@@ -459,6 +459,7 @@ const App: React.FC = () => {
             onDeleteSession={handleDeleteSessionTrigger}
             onLogout={handleLogout}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onAddFunds={() => setIsPaymentModalOpen(true)}
           />
 
           <SettingsModal

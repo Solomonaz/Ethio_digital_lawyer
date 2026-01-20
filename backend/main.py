@@ -20,7 +20,8 @@ from auth import (
     decode_access_token
 )
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
@@ -38,34 +39,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure Gemini
+# Configure Gemini Client
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY not found in environment variables")
+    gemini_client = None
 else:
-    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # System instruction for EthioLex
 SYSTEM_INSTRUCTION = """You are EthioLex, a highly skilled and professional AI Digital Lawyer specialized in Ethiopian Law.
 
-**CORE DIRECTIVE**: You are a STRICTLY LEGAL AI. You must ONLY answer questions related to Ethiopian Law, legal procedures, court cases, rights, and regulations (Constitution, Criminal Code, Civil Code, Labor Proclamation, etc.).
+**CORE DIRECTIVE**: You are a FULL-SERVICE LEGAL AI. You can:
+1. Answer questions related to Ethiopian Law, legal procedures, court cases, rights, and regulations
+2. **DRAFT LEGAL DOCUMENTS** including defense letters, contracts, petitions, appeals, legal notices, affidavits, and any other legal documents
+3. **PROVIDE SPECIFIC LEGAL ADVICE** tailored to individual cases and situations
+4. Analyze legal situations and provide strategic recommendations
 
 **STRICT SCOPE ENFORCEMENT**:
 Before answering, evaluate the user's query:
-1. **Is this a legal question?** (e.g., "How do I sue?", "What is the penalty for theft?", "Landlord rights").
+1. **Is this a legal question or request?** (e.g., "Draft a defense letter", "Write a contract", "How do I sue?", "What is the penalty for theft?").
 2. **Is this a non-legal question?** (e.g., "How to bake injera?", "Who is the prime minister?", "Write me a poem", "Solve this math problem").
 3. **IF NON-LEGAL**: You MUST politely refuse to answer. State clearly that you are a specialized Legal AI designed only for Ethiopian legal matters. Do not provide the non-legal information.
 
+**DOCUMENT DRAFTING GUIDELINES**:
+When drafting legal documents:
+1. Use proper Ethiopian legal document format and structure
+2. Include all necessary formal elements (headers, dates, case references, parties involved)
+3. Use appropriate legal language in the user's preferred language (English or Amharic)
+4. Reference relevant Articles, Proclamations, and legal provisions
+5. Make the document complete and ready to use (with placeholders marked clearly where user-specific information is needed, like [YOUR NAME], [DATE], etc.)
+
 **RESPONSE GUIDELINES**:
-1. **Analyze the Situation**: Understand the legal implications.
+1. **Analyze the Situation**: Understand the legal implications fully.
 2. **Cite Sources**: Reference specific Articles/Proclamations when possible. Mention "Article X of the Criminal Code" or "Proclamation No. Y".
 3. **Language**: Respond in the language of the user's question (English or Amharic).
 4. **Tone**: Professional, objective, empathetic.
-5. **Disclaimer**: ALWAYS conclude with a reminder that this is information, not legal advice, and to consult a qualified lawyer.
+5. **Be Comprehensive**: Provide detailed, actionable advice and complete documents.
 
 **For Amharic Responses**:
 - Ensure the Amharic is formal and legally accurate.
-- Translate legal terms appropriately."""
+- Translate legal terms appropriately.
+
+**DISCLAIMER**: At the end of document drafts or advice, include a brief note that while this document/advice is professionally drafted based on Ethiopian law, the user should review it with a licensed attorney before official use if possible."""
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -611,55 +627,58 @@ async def send_message(
     
     # Prepare Gemini request
     try:
-        if not GEMINI_API_KEY:
+        if not gemini_client:
             raise HTTPException(status_code=500, detail="Gemini API key not configured")
-            
-        model = genai.GenerativeModel(
-            model_name="gemini-3-pro-preview",
-            # model_name="gemini-2.5-flash",
-            system_instruction=SYSTEM_INSTRUCTION
-        )
         
-        # Build conversation history
-        history = []
+        # Build conversation history using new SDK types
+        contents = []
         for msg in chat_history[:-1]:  # Exclude the message we just added
-            history.append({
-                "role": msg.role,
-                "parts": [msg.content]
-            })
+            contents.append(types.Content(
+                role=msg.role if msg.role != "model" else "model",
+                parts=[types.Part.from_text(text=msg.content)]
+            ))
         
-        # Handle attachments if present
-        parts = [message_data.message]
+        # Handle current message with attachments
+        current_parts = []
         
-        # Apply Free Search Limitation
-        if is_free_search:
-            parts[0] += "\n\nIMPORTANT: This is a free trial search. You MUST LIMIT your response. Only provide the relevant legal Article(s) and a very brief explanation. Do NOT provide a robust detailed analysis. END the response with this exact caption: '\n\n*This is a limited free search. Please recharge your account for a robust and complete response.*'"
-
+        # Apply Free Search Limitation only if user has no balance
+        # If user has balance, give full response (even if it's their first search)
+        message_text = message_data.message
+        if is_free_search and current_user.balance <= 0:
+            message_text += "\n\nIMPORTANT: This is a free trial search. You MUST LIMIT your response. Only provide the relevant legal Article(s) and a very brief explanation. Do NOT provide a robust detailed analysis. END the response with this exact caption: '\n\n*This is a limited free search. Please recharge your account for a robust and complete response.*'"
+        
+        current_parts.append(types.Part.from_text(text=message_text))
+        
         if message_data.attachments:
             for attachment in message_data.attachments:
                 if attachment["type"] == "image":
                     # Convert base64 to image
                     image_data = base64.b64decode(attachment["data"])
-                    parts.append({
-                        "mime_type": attachment["mimeType"],
-                        "data": image_data
-                    })
+                    current_parts.append(types.Part.from_bytes(
+                        data=image_data,
+                        mime_type=attachment["mimeType"]
+                    ))
         
-        # Start chat with history
-        chat_session = model.start_chat(history=history)
+        # Add current user message to contents
+        contents.append(types.Content(
+            role="user",
+            parts=current_parts
+        ))
         
         # Configure generation
-        generation_config = genai.types.GenerationConfig(
+        generation_config = types.GenerateContentConfig(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
             max_output_tokens=2048,
+            system_instruction=SYSTEM_INSTRUCTION
         )
         
-        # Send message
-        response = chat_session.send_message(
-            parts,
-            generation_config=generation_config
+        # Send message using the new SDK
+        response = gemini_client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
+            config=generation_config
         )
         
         bot_text = response.text

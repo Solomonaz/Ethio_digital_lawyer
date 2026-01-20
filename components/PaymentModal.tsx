@@ -71,10 +71,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl"></div>
                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-amber-500/15 rounded-full blur-2xl"></div>
 
-                    {/* Close Button */}
                     <button
                         onClick={onClose}
-                        className="absolute top-4 right-4 p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all"
+                        className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-all"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -107,15 +106,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                                 onChange={(e) => setAmount(e.target.value)}
                                 className="w-full pl-14 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-100 focus:border-emerald-400 text-2xl font-bold text-slate-900 transition-all outline-none"
                                 placeholder="50"
-                                min="30"
+                                min="5"
                             />
                         </div>
-                        <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                            Minimum recharge: 30 ETB (~1 consultation)
-                        </p>
+
                     </div>
 
                     {/* Quick Amounts */}
@@ -152,8 +146,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                     {/* Pay Button */}
                     <button
                         onClick={handlePayment}
-                        disabled={isLoading || Number(amount) < 30}
-                        className={`w-full py-4 rounded-2xl font-bold text-base shadow-lg transition-all transform active:scale-[0.98] ${isLoading || Number(amount) < 30
+                        disabled={isLoading || Number(amount) < 5}
+                        className={`w-full py-4 rounded-2xl font-bold text-base shadow-lg transition-all transform active:scale-[0.98] ${isLoading || Number(amount) < 5
                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                             : 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-emerald-500/30 hover:shadow-emerald-500/40 hover:-translate-y-0.5'
                             }`}
