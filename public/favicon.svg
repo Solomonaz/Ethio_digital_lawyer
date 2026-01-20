@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#10b981;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="white" />
+  
+  <!-- Scales of Justice -->
+  <g transform="translate(106, 106) scale(0.6)" filter="url(#shadow)">
+    <!-- Central Pole -->
+    <rect x="235" y="20" width="30" height="400" rx="4" fill="url(#grad1)" />
+    
+    <!-- Top Bar -->
+    <rect x="50" y="60" width="400" height="20" rx="4" fill="#d97706" />
+    
+    <!-- Left Scale Pan -->
+    <path d="M50 80 L50 200 A 70 40 0 0 0 190 200 L190 80" fill="none" stroke="#d97706" stroke-width="8" />
+    <path d="M60 200 A 60 30 0 0 0 180 200" fill="url(#grad1)" opacity="0.9" />
+    
+    <!-- Right Scale Pan -->
+    <path d="M310 80 L310 200 A 70 40 0 0 0 450 200 L450 80" fill="none" stroke="#d97706" stroke-width="8" />
+    <path d="M320 200 A 60 30 0 0 0 440 200" fill="url(#grad1)" opacity="0.9" />
+    
+    <!-- Top Finial -->
+    <circle cx="250" cy="50" r="20" fill="#d97706" />
+  </g>
+</svg>

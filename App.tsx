@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import ChatMessage from './components/ChatMessage';
 import Sidebar from './components/Sidebar';
 import DisclaimerModal from './components/DisclaimerModal';
@@ -9,9 +10,9 @@ import SettingsModal from './components/SettingsModal';
 import AdminDashboard from './components/AdminDashboard';
 import { observeAuthState, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
 import { Message, Language, Attachment, User, ChatSession } from './types';
-import { UI_STRINGS } from './constants';
 
 const App: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
@@ -21,7 +22,6 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [language, setLanguage] = useState<Language>('en');
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -48,8 +48,6 @@ const App: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
-
-  const t = UI_STRINGS[language];
 
   useEffect(() => {
     const unsubscribe = observeAuthState((user) => {
@@ -80,7 +78,7 @@ const App: React.FC = () => {
                   .then(r => r.json())
                   .then(userData => {
                     setCurrentUser(prev => prev ? { ...prev, balance: userData.balance } : null);
-                    setSuccessModal({ open: true, amount: userData.balance, message: "Your account has been successfully credited." });
+                    setSuccessModal({ open: true, amount: userData.balance, message: t('accountCredited') });
                   });
               }
             })
@@ -145,7 +143,7 @@ const App: React.FC = () => {
       const welcomeMsg: Message = {
         id: 'welcome-' + Date.now(),
         role: 'model',
-        text: UI_STRINGS[language].welcomeText,
+        text: t('welcomeText'),
         timestamp: new Date()
       };
       newSession.messages = [welcomeMsg];
@@ -178,7 +176,7 @@ const App: React.FC = () => {
     if ((!input.trim() && attachments.length === 0) || isLoading || !currentSession || !currentUser) return;
 
     if (!sessionIsFree && (currentUser.balance || 0) < searchCost) {
-      setToast({ message: "Insufficient balance. Please recharge.", type: 'error' });
+      setToast({ message: t('insufficientBalanceMsg'), type: 'error' });
       return;
     }
 
@@ -202,7 +200,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const botResponse = await sendMessageToBackend(currentSession.id, userText, language, userAttachments);
+      const botResponse = await sendMessageToBackend(currentSession.id, userText, i18n.language as Language, userAttachments);
       const finalMessages = [...updatedMessages, botResponse];
       setMessages(finalMessages);
       const updatedSessions = await getUserSessions(currentUser.id);
@@ -226,14 +224,14 @@ const App: React.FC = () => {
     } catch (error: any) {
       // Check if it's an insufficient balance error from backend (402)
       if (error.message && error.message.includes("Insufficient balance")) {
-        setToast({ message: "Insufficient balance. Please recharge.", type: 'error' });
+        setToast({ message: t('insufficientBalanceMsg'), type: 'error' });
         setIsPaymentModalOpen(true);
       }
 
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: t.error,
+        text: t('error'),
         timestamp: new Date(),
         isError: true
       };
@@ -269,7 +267,7 @@ const App: React.FC = () => {
         };
         setAttachments(prev => [...prev, newAttachment]);
       } catch (error) {
-        setToast({ message: "Failed to upload file", type: 'error' });
+        setToast({ message: t('failedToUpload'), type: 'error' });
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -283,13 +281,13 @@ const App: React.FC = () => {
     // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setToast({ message: "Browser not supported", type: 'error' });
+      setToast({ message: t('browserNotSupported'), type: 'error' });
       return;
     }
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = language === 'am' ? 'am-ET' : 'en-US';
+    recognition.lang = i18n.language === 'am' ? 'am-ET' : 'en-US';
 
     recognition.onstart = () => setIsRecording(true);
     recognition.onresult = (event: any) => {
@@ -394,7 +392,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {!currentUser && <AuthModal onLogin={handleLogin} language={language} onLanguageChange={setLanguage} />}
+      {!currentUser && <AuthModal onLogin={handleLogin} />}
 
       {currentUser && (
         <>
@@ -403,7 +401,7 @@ const App: React.FC = () => {
             onClose={() => setSuccessModal({ open: false })}
             amount={successModal.amount}
             message={successModal.message}
-            title="Payment Successful!"
+            title={t('paymentSuccessful')}
           />
           <DisclaimerModal
             isOpen={isDisclaimerOpen}
@@ -411,7 +409,6 @@ const App: React.FC = () => {
               setIsDisclaimerOpen(false);
               localStorage.setItem('disclaimerAccepted', 'true');
             }}
-            language={language}
           />
 
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,application/pdf" />
@@ -426,21 +423,21 @@ const App: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">{t.clearChat}</h3>
+                  <h3 className="text-lg font-bold text-slate-900">{t('clearChat')}</h3>
                 </div>
-                <p className="text-slate-600 mb-6 text-sm">{t.clearChatConfirm}</p>
+                <p className="text-slate-600 mb-6 text-sm">{t('clearChatConfirm')}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setIsClearModalOpen(false)}
                     className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-colors"
                   >
-                    {t.cancel}
+                    {t('cancel')}
                   </button>
                   <button
                     onClick={confirmDeleteSession}
                     className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl font-medium hover:from-red-500 hover:to-red-400 transition-all shadow-lg shadow-red-500/20"
                   >
-                    {t.confirm}
+                    {t('confirmDelete')}
                   </button>
                 </div>
               </div>
@@ -450,7 +447,6 @@ const App: React.FC = () => {
           <Sidebar
             isOpen={isSidebarOpen}
             toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-            language={language}
             user={currentUser}
             sessions={sessions}
             currentSessionId={currentSession?.id || null}
@@ -466,8 +462,6 @@ const App: React.FC = () => {
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
             user={currentUser}
-            language={language}
-            onLanguageChange={setLanguage}
             onAddFunds={() => {
               setIsSettingsOpen(false);
               setIsPaymentModalOpen(true);
@@ -478,7 +472,6 @@ const App: React.FC = () => {
           <PaymentModal
             isOpen={isPaymentModalOpen}
             onClose={() => setIsPaymentModalOpen(false)}
-            language={language}
             userEmail={currentUser?.email || currentUser?.username + '@ethiolex.com'}
           />
 
@@ -515,7 +508,7 @@ const App: React.FC = () => {
 
                 {/* Desktop Tagline */}
                 <h2 className="hidden md:block text-lg font-bold eth-gradient-text tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  {t.appTagline}
+                  {t('appTagline')}
                 </h2>
               </div>
 
@@ -551,8 +544,8 @@ const App: React.FC = () => {
                 {/* Language Toggle */}
                 <div className="flex bg-slate-100 p-1 rounded-xl">
                   <button
-                    onClick={() => setLanguage('en')}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${language === 'en'
+                    onClick={() => i18n.changeLanguage('en')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${i18n.language === 'en'
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
                       }`}
@@ -560,8 +553,8 @@ const App: React.FC = () => {
                     English
                   </button>
                   <button
-                    onClick={() => setLanguage('am')}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${language === 'am'
+                    onClick={() => i18n.changeLanguage('am')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${i18n.language === 'am'
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
                       }`}
@@ -590,17 +583,17 @@ const App: React.FC = () => {
                         <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-2xl"></div>
                       </div>
                       <h2 className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
-                        {t.welcomeTitle}
+                        {t('welcomeTitle')}
                       </h2>
                       <p className="text-slate-500 max-w-md text-sm">
-                        {t.welcomeText}
+                        {t('welcomeText')}
                       </p>
                     </div>
                   )}
 
                   {/* Messages */}
                   {messages.map(msg => (
-                    <ChatMessage key={msg.id} message={msg} language={language} />
+                    <ChatMessage key={msg.id} message={msg} />
                   ))}
 
                   {/* Loading Indicator */}
@@ -621,7 +614,7 @@ const App: React.FC = () => {
                               <div className="w-2 h-2 bg-amber-400 rounded-full loading-dot"></div>
                               <div className="w-2 h-2 bg-red-500 rounded-full loading-dot"></div>
                             </div>
-                            <span className="text-xs text-slate-400 font-medium">{t.consulting}</span>
+                            <span className="text-xs text-slate-400 font-medium">{t('consulting')}</span>
                           </div>
                         </div>
                       </div>
@@ -674,15 +667,15 @@ const App: React.FC = () => {
                         </svg>
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-red-800">Insufficient Balance</p>
-                        <p className="text-xs text-red-600">Add funds to continue your legal consultation</p>
+                        <p className="text-sm font-semibold text-red-800">{t('insufficientBalanceTitle')}</p>
+                        <p className="text-xs text-red-600">{t('insufficientBalanceMsg')}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => setIsPaymentModalOpen(true)}
                       className="flex-shrink-0 bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:from-red-500 hover:to-red-400 transition-all shadow-lg shadow-red-500/20"
                     >
-                      Add Funds
+                      {t('addFunds')}
                     </button>
                   </div>
                 )}
@@ -732,10 +725,10 @@ const App: React.FC = () => {
                     onKeyDown={handleKeyDown}
                     placeholder={
                       currentUser && (currentUser.balance || 0) < searchCost && !sessionIsFree
-                        ? `Insufficient balance (${searchCost} ETB required)`
+                        ? t('insufficientBalance', { cost: searchCost })
                         : isRecording
-                          ? t.listening
-                          : t.inputPlaceholder
+                          ? t('listening')
+                          : t('inputPlaceholder')
                     }
                     className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-3 px-2 text-slate-800 placeholder-slate-400 text-sm outline-none"
                     rows={1}
@@ -759,7 +752,7 @@ const App: React.FC = () => {
 
                 {/* Disclaimer */}
                 <p className="text-center text-[10px] text-slate-400 mt-3">
-                  <span className="text-red-400 font-medium">{t.disclaimerText.split('.')[0]}.</span>
+                  <span className="text-red-400 font-medium">{t('disclaimerText').split('.')[0]}.</span>
                 </p>
               </div>
             </div>

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Language } from '../types';
+import { useTranslation } from 'react-i18next';
 
 interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    language: Language;
     userEmail: string;
 }
 
-const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, userEmail }) => {
+const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail }) => {
+    const { t } = useTranslation();
     const [amount, setAmount] = useState('50');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -87,9 +87,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                             </svg>
                         </div>
                         <h2 className="text-xl font-bold text-white mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>
-                            Add Funds
+                            {t('addFunds')}
                         </h2>
-                        <p className="text-white/60 text-sm">Recharge your account to continue consulting</p>
+                        <p className="text-white/60 text-sm">{t('rechargeParams')}</p>
                     </div>
                 </div>
 
@@ -97,7 +97,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                 <div className="p-6">
                     {/* Amount Input */}
                     <div className="mb-5">
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Amount (ETB)</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">{t('amountETB')}</label>
                         <div className="relative">
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm">ETB</span>
                             <input
@@ -125,7 +125,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                             >
                                 <span className="text-sm font-bold">{item.label}</span>
                                 <span className={`block text-[9px] mt-0.5 ${amount === item.value ? 'text-emerald-100' : 'text-slate-400'}`}>
-                                    {item.queries} queries
+                                    {item.queries} {t('queries')}
                                 </span>
                             </button>
                         ))}
@@ -155,14 +155,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                         {isLoading ? (
                             <div className="flex items-center justify-center gap-2">
                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                Processing...
+                                {t('processing')}
                             </div>
                         ) : (
                             <span className="flex items-center justify-center gap-2">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
-                                Pay {amount} ETB with Chapa
+                                {t('payWithChapa', { amount })}
                             </span>
                         )}
                     </button>
@@ -172,7 +172,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, language, 
                         <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
-                        <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Secured by Chapa Payment Gateway</span>
+                        <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">{t('securedByChapa')}</span>
                     </div>
                 </div>
             </div>

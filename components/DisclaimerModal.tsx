@@ -1,16 +1,15 @@
 import React from 'react';
-import { Language } from '../types';
-import { UI_STRINGS } from '../constants';
+import { useTranslation } from 'react-i18next';
 
 interface DisclaimerModalProps {
   isOpen: boolean;
   onAccept: () => void;
-  language: Language;
 }
 
-const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept, language }) => {
+const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept }) => {
+  const { t } = useTranslation();
+
   if (!isOpen) return null;
-  const t = UI_STRINGS[language];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-fade-in">
@@ -31,13 +30,13 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept, lan
 
           {/* Title */}
           <h3 className="text-2xl font-bold text-slate-900 mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
-            {t.disclaimerTitle}
+            {t('disclaimerTitle')}
           </h3>
 
           {/* Content */}
           <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-5 mb-6 border border-amber-100">
             <p className="text-slate-700 text-sm leading-relaxed">
-              {t.disclaimerText}
+              {t('disclaimerText')}
             </p>
           </div>
 
@@ -49,7 +48,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept, lan
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
-              <p className="text-[10px] text-emerald-700 font-medium">Secure</p>
+              <p className="text-[10px] text-emerald-700 font-medium">{t('secure')}</p>
             </div>
             <div className="bg-blue-50 rounded-xl p-3">
               <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center mx-auto mb-2">
@@ -57,7 +56,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept, lan
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <p className="text-[10px] text-blue-700 font-medium">Instant</p>
+              <p className="text-[10px] text-blue-700 font-medium">{t('instant')}</p>
             </div>
             <div className="bg-purple-50 rounded-xl p-3">
               <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center mx-auto mb-2">
@@ -65,7 +64,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept, lan
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
               </div>
-              <p className="text-[10px] text-purple-700 font-medium">Expert</p>
+              <p className="text-[10px] text-purple-700 font-medium">{t('expert')}</p>
             </div>
           </div>
 
@@ -74,7 +73,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept, lan
             onClick={onAccept}
             className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white py-4 rounded-xl font-semibold text-base shadow-lg shadow-emerald-500/30 transition-all hover:-translate-y-0.5 hover:shadow-emerald-500/40"
           >
-            {t.acceptDisclaimer}
+            {t('acceptDisclaimer')}
           </button>
         </div>
       </div>

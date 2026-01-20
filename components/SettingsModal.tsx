@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Language, User } from '../types';
-import { UI_STRINGS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { User, Language } from '../types';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     user: User | null;
-    language: Language;
-    onLanguageChange: (lang: Language) => void;
     onAddFunds: () => void;
     onLogout: () => void;
 }
@@ -16,14 +14,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen,
     onClose,
     user,
-    language,
-    onLanguageChange,
     onAddFunds,
     onLogout
 }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'account' | 'billing'>('account');
     const [searchCost, setSearchCost] = useState<number>(0);
-    const t = UI_STRINGS[language];
 
     // Fetch search cost from backend
     useEffect(() => {
@@ -69,8 +65,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </svg>
                         </div>
                         <div>
-                            <h2 className="text-lg font-semibold text-slate-900">{t.settings}</h2>
-                            <p className="text-sm text-slate-500">Manage your account and preferences</p>
+                            <h2 className="text-lg font-semibold text-slate-900">{t('settings')}</h2>
+                            <p className="text-sm text-slate-500">{t('manageAccount')}</p>
                         </div>
                     </div>
                     <button
@@ -86,8 +82,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* Tabs */}
                 <div className="flex border-b border-slate-200 px-6">
                     {[
-                        { id: 'account', label: 'Account', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-                        { id: 'billing', label: 'Billing', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' }
+                        { id: 'account', label: t('account'), icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+                        { id: 'billing', label: t('billing'), icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' }
                     ].map((tab) => (
                         <button
                             key={tab.id}
@@ -128,11 +124,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         <p className="text-sm text-slate-500">{user.email || 'No email set'}</p>
                                         <div className="flex items-center gap-2 mt-2">
                                             <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
-                                                {user.authProvider === 'google' ? 'Google Account' : 'Email Account'}
+                                                {user.authProvider === 'google' ? t('googleAccount') : t('emailAccount')}
                                             </span>
                                             {user.is_admin && (
                                                 <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
-                                                    Admin
+                                                    {t('admin')}
                                                 </span>
                                             )}
                                         </div>
@@ -142,7 +138,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                             {/* Account Info */}
                             <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Account Information</h4>
+                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('accountInfo')}</h4>
                                 <div className="grid gap-4">
                                     <div className="flex items-center justify-between p-4 rounded-xl bg-white border border-slate-200">
                                         <div className="flex items-center gap-3">
@@ -152,7 +148,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium text-slate-900">Username</p>
+                                                <p className="text-sm font-medium text-slate-900">{t('username')}</p>
                                                 <p className="text-sm text-slate-500">{user.username}</p>
                                             </div>
                                         </div>
@@ -165,7 +161,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium text-slate-900">Member Since</p>
+                                                <p className="text-sm font-medium text-slate-900">{t('memberSince')}</p>
                                                 <p className="text-sm text-slate-500">{user.createdAt?.toLocaleDateString() || 'N/A'}</p>
                                             </div>
                                         </div>
@@ -181,7 +177,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                 </svg>
-                                {t.logout}
+                                {t('logout')}
                             </button>
                         </div>
                     )}
@@ -192,7 +188,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             {/* Balance Card */}
                             <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl shadow-emerald-500/25">
                                 <div className="flex items-center justify-between mb-4">
-                                    <span className="text-sm font-medium text-emerald-100 uppercase tracking-wider">{t.balance}</span>
+                                    <span className="text-sm font-medium text-emerald-100 uppercase tracking-wider">{t('balance')}</span>
                                     <div className="w-3 h-3 rounded-full bg-white/30 animate-pulse"></div>
                                 </div>
                                 <div className="flex items-baseline gap-2 mb-6">
@@ -206,13 +202,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     }}
                                     className="w-full py-3 px-4 rounded-xl bg-white text-emerald-600 font-semibold hover:bg-emerald-50 transition-all shadow-lg"
                                 >
-                                    + {t.addFunds}
+                                    + {t('addFunds')}
                                 </button>
                             </div>
 
                             {/* Pricing Info */}
                             <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Pricing</h4>
+                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pricing')}</h4>
                                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
                                     <div className="flex items-start gap-3">
                                         <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
@@ -221,8 +217,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-medium text-amber-800">{searchCost} ETB per query</p>
-                                            <p className="text-sm text-amber-700 mt-1">Each legal consultation message costs {searchCost} Ethiopian Birr. Make sure you have sufficient balance before asking questions.</p>
+                                            <p className="text-sm font-medium text-amber-800">{t('costPerQuery', { cost: searchCost })}</p>
+                                            <p className="text-sm text-amber-700 mt-1">{t('costDescription', { cost: searchCost })}</p>
                                         </div>
                                     </div>
                                 </div>

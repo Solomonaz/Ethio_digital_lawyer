@@ -1,11 +1,11 @@
 import React from 'react';
-import { APP_NAME, UI_STRINGS } from '../constants';
-import { Language, ChatSession, User } from '../types';
+import { useTranslation } from 'react-i18next';
+import { APP_NAME } from '../constants';
+import { ChatSession, User } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
   toggleSidebar: () => void;
-  language: Language;
   user: User | null;
   sessions: ChatSession[];
   currentSessionId: string | null;
@@ -20,7 +20,6 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   toggleSidebar,
-  language,
   user,
   sessions,
   currentSessionId,
@@ -31,7 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   onAddFunds
 }) => {
-  const t = UI_STRINGS[language];
+  const { t } = useTranslation();
 
   // Helper to check if a session has real user messages (not just welcome/model messages)
   const hasRealContent = (session: ChatSession) => {
@@ -49,10 +48,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     yesterday.setDate(yesterday.getDate() - 1);
 
     const groups: { label: string; items: ChatSession[] }[] = [
-      { label: t.today, items: [] },
-      { label: t.yesterday, items: [] },
-      { label: t.previous7Days, items: [] },
-      { label: t.older, items: [] }
+      { label: t('today'), items: [] },
+      { label: t('yesterday'), items: [] },
+      { label: t('previous7Days'), items: [] },
+      { label: t('older'), items: [] }
     ];
 
     sessions.forEach(session => {
@@ -102,10 +101,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                    <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="white" strokeWidth="1.5">
-                      <path d="M12 3v13M4 7h16M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M8 21h8M12 16l-3 5h6l-3-5" />
-                    </svg>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 border border-emerald-400/20">
+                    <img src="/favicon.svg" alt="EthioLex Logo" className="w-7 h-7 object-contain drop-shadow-md" />
                   </div>
                   <div className="absolute inset-0 rounded-xl bg-emerald-500/20 blur-xl"></div>
                 </div>
@@ -143,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <span>{t.newChat}</span>
+                <span>{t('newChat')}</span>
               </button>
             </div>
           )}
@@ -157,7 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                 </div>
-                <p className="text-slate-500 text-sm">{t.noHistory}</p>
+                <p className="text-slate-500 text-sm">{t('noHistory')}</p>
                 <p className="text-slate-600 text-xs mt-1">Start a new consultation above</p>
               </div>
             ) : (
@@ -246,7 +243,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={onOpenSettings}
                     className="p-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
-                    title={t.settings}
+                    title={t('settings')}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -258,7 +255,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={onLogout}
                     className="p-2.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                    title={t.logout}
+                    title={t('logout')}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -267,11 +264,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               </div>
             )}
-
-            {/* Copyright */}
-            <p className="text-[10px] text-slate-600 text-center mt-4 pt-3 border-t border-slate-800/50">
-              © {new Date().getFullYear()} EthioLex
-            </p>
           </div>
         </div>
       </div>
