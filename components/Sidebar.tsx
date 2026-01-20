@@ -89,64 +89,68 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Sidebar Container */}
-      <div className={`fixed inset-y-0 left-0 z-30 w-72 flex flex-col transform transition-all duration-300 ease-out md:translate-x-0 md:static md:inset-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`fixed inset-y-0 left-0 z-30 flex flex-col transform transition-all duration-300 ease-out 
+        md:static md:inset-auto md:transform-none
+        ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 md:translate-x-0 md:w-20'}
+      `}>
 
         {/* Main Sidebar Content */}
-        <div className="flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden">
+        <div className={`flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 md:w-20'}`}>
 
           {/* Header */}
-          <div className="relative p-5 border-b border-slate-800/50">
+          <div className={`relative p-5 border-b border-slate-800/50 flex items-center ${isOpen ? 'justify-between' : 'justify-center flex-col gap-4'}`}>
             <div className="absolute top-0 left-0 right-0 h-1 eth-flag-stripe"></div>
 
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 border border-emerald-400/20">
-                    <img src="/favicon.svg" alt="EthioLex Logo" className="w-7 h-7 object-contain drop-shadow-md" />
-                  </div>
-                  <div className="absolute inset-0 rounded-xl bg-emerald-500/20 blur-xl"></div>
+            <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center'}`}>
+              <div className="relative">
+                <div className="w-14 h-14 rounded-xl flex items-center justify-center">
+                  <img src="/favicon.svg" alt="EthioLex Logo" className="w-10 h-10 object-contain" />
                 </div>
-                <div>
+              </div>
+              {isOpen && (
+                <div className="animate-fade-in">
                   <h1 className="text-lg font-bold text-white tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
                     {APP_NAME}
                   </h1>
                   <p className="text-[10px] text-emerald-400 font-medium uppercase tracking-widest">Digital Lawyer</p>
                 </div>
-              </div>
-
-              {/* Close Button (Mobile) */}
-              <button
-                onClick={toggleSidebar}
-                className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              )}
             </div>
+
+            {/* Toggle Button */}
+            <button
+              onClick={toggleSidebar}
+              className={`p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all ${!isOpen && 'mt-2'}`}
+              title={t('toggleSidebar')}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
           </div>
 
           {/* New Chat Button - Only show when there are previous histories */}
           {sessionGroups.length > 0 && (
-            <div className="px-4 py-4">
+            <div className={`px-4 py-4 ${!isOpen && 'flex justify-center'}`}>
               <button
                 onClick={() => {
                   onNewChat();
                   if (window.innerWidth < 768) toggleSidebar();
                 }}
-                className="w-full group relative overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white py-3.5 px-4 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all duration-300 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5"
+                className={`group relative overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl font-medium text-sm flex items-center justify-center transition-all duration-300 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5 ${isOpen ? 'w-full py-3.5 px-4 gap-2' : 'w-12 h-12 p-0'}`}
+                title={t('newChat')}
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <span>{t('newChat')}</span>
+                {isOpen && <span>{t('newChat')}</span>}
               </button>
             </div>
           )}
 
           {/* Chat History */}
-          <div className="flex-1 overflow-y-auto px-3 pb-4 custom-scrollbar">
+          <div className={`flex-1 overflow-y-auto px-3 pb-4 custom-scrollbar ${!isOpen ? 'hidden' : ''}`}>
             {sessionGroups.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
@@ -208,26 +212,28 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* User Footer - Cleaner design with Settings button */}
           <div className="p-4 border-t border-slate-800/50 bg-gradient-to-t from-slate-950 to-transparent">
             {user && (
-              <div className="flex items-center justify-between">
+              <div className={`flex items-center ${isOpen ? 'justify-between' : 'flex-col gap-4'}`}>
                 {/* User Profile */}
-                <div className="flex items-center gap-3">
-                  <div className="relative">
+                <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center'}`}>
+                  <div className="relative cursor-pointer" onClick={onOpenSettings} title={user.username}>
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm">
                       {user.username?.charAt(0).toUpperCase()}
                     </div>
                     <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.username}</p>
-                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      {user.balance?.toLocaleString() || '0'} ETB
-                    </p>
-                  </div>
+                  {isOpen && (
+                    <div className="animate-fade-in">
+                      <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.username}</p>
+                      <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {user.balance?.toLocaleString() || '0'} ETB
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-1">
+                <div className={`flex items-center gap-1 ${!isOpen && 'flex-col'}`}>
                   {/* Add Funds Button */}
                   <button
                     onClick={onAddFunds}
