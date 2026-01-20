@@ -29,7 +29,7 @@ const DisclaimerModal: React.FC<DisclaimerModalProps> = ({ isOpen, onAccept }) =
           </div>
 
           {/* Title */}
-          <h3 className="text-2xl font-bold text-slate-900 mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
+          <h3 className="text-2xl font-bold text-red-600 mb-3">
             {t('disclaimerTitle')}
           </h3>
 

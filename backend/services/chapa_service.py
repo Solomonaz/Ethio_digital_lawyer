@@ -22,8 +22,13 @@ class ChapaService:
             "tx_ref": tx_ref,
             "callback_url": callback_url,
             "return_url": return_url,
-            "customization[title]": "EthioLex Payment",
-            "customization[description]": "Payment for EthioLex services"
+            "customization": {
+                "title": "EthioLex Payment",
+                "description": "Payment for EthioLex services"
+            },
+            "meta": {
+                "hide_receipt": "true"
+            }
         }
 
         try:
