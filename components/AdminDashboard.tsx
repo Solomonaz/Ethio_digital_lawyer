@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface AdminUser {
     id: number;
@@ -32,6 +33,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'settings'>('users');
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [payments, setPayments] = useState<AdminPayment[]>([]);
@@ -185,15 +187,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                     <div className="flex items-center gap-4">
                         <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-colors">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                            Back to Chat
+                            {t('backToChat')}
                         </button>
                         <div className="h-6 w-px bg-slate-200"></div>
                         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                             <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-sm">⚡</span>
-                            Admin Dashboard
+                            {t('adminDashboard')}
                         </h1>
                     </div>
-                    <div className="text-sm text-slate-500">EthioLex Administration</div>
+                    <div className="text-sm text-slate-500">{t('ethioLexAdmin')}</div>
                 </div>
             </header>
 
@@ -201,26 +203,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-                        <div className="text-slate-500 text-sm font-medium mb-1">👥 Total Users</div>
+                        <div className="text-slate-500 text-sm font-medium mb-1">👥 {t('totalUsers')}</div>
                         <div className="text-3xl font-bold text-slate-900">{stats.totalUsers}</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-                        <div className="text-slate-500 text-sm font-medium mb-1">✓ Active Users</div>
+                        <div className="text-slate-500 text-sm font-medium mb-1">✓ {t('activeUsers')}</div>
                         <div className="text-3xl font-bold text-green-600">{stats.activeUsers}</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-                        <div className="text-slate-500 text-sm font-medium mb-1">⏳ Pending</div>
+                        <div className="text-slate-500 text-sm font-medium mb-1">⏳ {t('pending')}</div>
                         <div className="text-3xl font-bold text-yellow-600">{stats.pendingPayments}</div>
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-                        <div className="text-slate-500 text-sm font-medium mb-1">📈 Revenue</div>
+                        <div className="text-slate-500 text-sm font-medium mb-1">📈 {t('revenue')}</div>
                         <div className="text-3xl font-bold text-purple-600">{stats.totalRevenue} <span className="text-base text-slate-400">ETB</span></div>
                     </div>
                 </div>
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6 border-b border-slate-200 pb-4">
-                    {[{ key: 'users', label: 'Users', icon: '👥' }, { key: 'payments', label: 'Payments', icon: '💳' }, { key: 'settings', label: 'Settings', icon: '⚙️' }].map((tab) => (
+                    {[{ key: 'users', label: t('users'), icon: '👥' }, { key: 'payments', label: t('payments'), icon: '💳' }, { key: 'settings', label: t('settings'), icon: '⚙️' }].map((tab) => (
                         <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`px-5 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${activeTab === tab.key ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                             <span>{tab.icon}</span>{tab.label}
                         </button>
@@ -239,11 +241,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">User</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Email</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Balance</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Status</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Actions</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('username')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('email')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('balance')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('status')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -257,7 +259,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                 <div>
                                                     <div className="text-slate-900 font-medium flex items-center gap-2">
                                                         {u.username}
-                                                        {u.is_admin && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Admin</span>}
+                                                        {u.is_admin && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{t('admin')}</span>}
                                                     </div>
                                                     <div className="text-slate-400 text-xs">ID: {u.id}</div>
                                                 </div>
@@ -279,15 +281,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                             {!u.is_admin && (
                                                 <div className="flex gap-2">
                                                     <button onClick={() => toggleUserActive(u.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${u.is_active ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-700' : 'bg-green-100 hover:bg-green-200 text-green-700'}`}>
-                                                        {u.is_active ? '⏸ Deactivate' : '▶ Activate'}
+                                                        {u.is_active ? t('deactivate') : t('activate')}
                                                     </button>
                                                     {confirmDelete === u.id ? (
                                                         <div className="flex gap-1">
-                                                            <button onClick={() => deleteUser(u.id)} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium">Confirm</button>
-                                                            <button onClick={() => setConfirmDelete(null)} className="px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs font-medium">Cancel</button>
+                                                            <button onClick={() => deleteUser(u.id)} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium">{t('confirm')}</button>
+                                                            <button onClick={() => setConfirmDelete(null)} className="px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs font-medium">{t('cancel')}</button>
                                                         </div>
                                                     ) : (
-                                                        <button onClick={() => setConfirmDelete(u.id)} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium">🗑 Delete</button>
+                                                        <button onClick={() => setConfirmDelete(u.id)} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium">🗑 {t('delete')}</button>
                                                     )}
                                                 </div>
                                             )}
@@ -300,16 +302,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Transaction</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">User</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Amount</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Status</th>
-                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Actions</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('transaction')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('username')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('amount')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('status')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {payments.length === 0 ? (
-                                    <tr><td colSpan={5} className="p-12 text-center text-slate-400">No payments yet</td></tr>
+                                    <tr><td colSpan={5} className="p-12 text-center text-slate-400">{t('noPayments')}</td></tr>
                                 ) : payments.map((p) => (
                                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                         <td className="p-4"><div className="font-mono text-sm text-slate-700">{p.tx_ref}</div><div className="text-slate-400 text-xs">ID: {p.id}</div></td>
@@ -317,14 +319,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <td className="p-4"><span className="text-slate-900 font-semibold">{p.amount}</span><span className="text-slate-400 ml-1">ETB</span></td>
                                         <td className="p-4">
                                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${p.status === 'success' ? 'bg-green-100 text-green-700' : p.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                {p.status === 'success' ? '✓ Success' : p.status === 'failed' ? '✕ Failed' : '⏳ Pending'}
+                                                {p.status === 'success' ? `✓ ${t('successStatus')}` : p.status === 'failed' ? `✕ ${t('failedStatus')}` : `⏳ ${t('pending')}`}
                                             </span>
                                         </td>
                                         <td className="p-4">
                                             {p.status === 'pending' && (
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => approvePayment(p.id)} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-xs font-medium">✓ Approve</button>
-                                                    <button onClick={() => rejectPayment(p.id)} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium">✕ Reject</button>
+                                                    <button onClick={() => approvePayment(p.id)} className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-xs font-medium">✓ {t('approve')}</button>
+                                                    <button onClick={() => rejectPayment(p.id)} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-medium">✕ {t('reject')}</button>
                                                 </div>
                                             )}
                                         </td>
@@ -335,17 +337,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                     ) : (
                         <div className="p-8">
                             <div className="max-w-md">
-                                <h2 className="text-lg font-bold text-slate-800 mb-6">⚙️ App Settings</h2>
+                                <h2 className="text-lg font-bold text-slate-800 mb-6">⚙️ {t('appSettings')}</h2>
                                 <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                                    <label className="block text-sm font-medium text-slate-700 mb-3">Search Cost per Consultation</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-3">{t('searchCostParam')}</label>
                                     <div className="flex gap-3">
                                         <div className="relative flex-1">
                                             <input type="number" value={searchCost} onChange={(e) => setSearchCost(e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-3 text-slate-800 text-lg font-bold focus:ring-2 focus:ring-green-500" />
                                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">ETB</span>
                                         </div>
-                                        <button onClick={updateSearchCost} className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-sm">Save</button>
+                                        <button onClick={updateSearchCost} className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-sm">{t('save')}</button>
                                     </div>
-                                    <p className="text-slate-500 text-sm mt-3">Users will be charged this amount for each legal consultation.</p>
+                                    <p className="text-slate-500 text-sm mt-3">{t('searchCostHelp')}</p>
                                 </div>
                             </div>
                         </div>

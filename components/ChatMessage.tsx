@@ -1,17 +1,16 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Message, Language } from '../types';
-import { UI_STRINGS } from '../constants';
+import { useTranslation } from 'react-i18next';
+import { Message } from '../types';
 
 interface ChatMessageProps {
   message: Message;
-  language: Language;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, language }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
+  const { t } = useTranslation();
   const isUser = message.role === 'user';
   const isError = message.isError;
-  const t = UI_STRINGS[language];
 
   const [isCopied, setIsCopied] = React.useState(false);
 
@@ -102,7 +101,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language }) => {
               </div>
             ) : (
               <div className={`markdown-body prose prose-sm max-w-none ${isUser ? 'prose-invert' : 'prose-slate prose-p:leading-8 prose-li:leading-8'}`}>
-                <ReactMarkdown>{message.text}</ReactMarkdown>
+                <ReactMarkdown>
+                  {message.text.replace(
+                    "*This is a limited free search. Please recharge your account for a robust and complete response.*",
+                    ""
+                  )}
+                </ReactMarkdown>
+                {message.text.includes("*This is a limited free search. Please recharge your account for a robust and complete response.*") && (
+                  <div className="mt-4 pt-3 border-t border-amber-100">
+                    <p className="text-amber-600 text-xs font-semibold italic flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {t('limitedSearchFooter')}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -143,7 +157,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language }) => {
                       <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
                     </svg>
                   </div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t.sources}</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{t('sources')}</p>
                 </div>
                 <ul className="space-y-2">
                   {message.groundingSources.map((source, idx) => (

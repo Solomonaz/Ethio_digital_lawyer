@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface SuccessModalProps {
     isOpen: boolean;
@@ -8,8 +9,13 @@ interface SuccessModalProps {
     amount?: number;
 }
 
-const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title = "Success!", message, amount }) => {
+const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title, message, amount }) => {
+    const { t } = useTranslation();
+
     if (!isOpen) return null;
+
+    // Use default title if not provided
+    const displayTitle = title || t('success');
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -45,7 +51,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title = "S
 
                     {/* Title */}
                     <h2 className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
-                        {title}
+                        {displayTitle}
                     </h2>
 
                     {/* Message */}
@@ -58,7 +64,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title = "S
                             <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-full blur-2xl"></div>
 
                             <div className="relative">
-                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">New Balance</div>
+                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-2">{t('newBalance')}</div>
                                 <div className="flex items-baseline justify-center gap-1">
                                     <span className="text-4xl font-bold text-emerald-600 tracking-tight">
                                         {amount.toLocaleString().split('.')[0]}
@@ -77,7 +83,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title = "S
                         onClick={onClose}
                         className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl font-semibold text-base shadow-lg shadow-emerald-500/30 transition-all hover:-translate-y-0.5 hover:shadow-emerald-500/40"
                     >
-                        Continue Consulting
+                        {t('continueConsulting')}
                     </button>
                 </div>
             </div>
