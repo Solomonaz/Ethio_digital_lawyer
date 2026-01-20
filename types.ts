@@ -33,6 +33,7 @@ export interface User {
   balance: number;
   is_admin?: boolean;
   is_verified?: boolean;
+  needs_phone_number?: boolean;
 }
 
 export interface ChatSession {

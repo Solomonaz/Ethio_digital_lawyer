@@ -10,12 +10,13 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChange }) => {
-  const [view, setView] = useState<'login' | 'signup' | 'verify'>('login');
+  const [view, setView] = useState<'login' | 'signup' | 'verify' | 'collect-phone'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -53,7 +54,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
         setPendingUser(user);
 
         // Request verification code
-        await requestVerificationCode(phoneNumber);
+        const result = await requestVerificationCode(phoneNumber);
+        if (result.dev_code) {
+          setDevCode(result.dev_code);
+        }
         startResendTimer();
         setView('verify');
       }
@@ -112,7 +116,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
     setIsLoading(true);
     try {
       const user = await loginWithGoogle();
-      onLogin(user);
+
+      // Check if user needs to provide phone number
+      if (user.needs_phone_number) {
+        setPendingUser(user);
+        setView('collect-phone');
+      } else {
+        onLogin(user);
+      }
     } catch (err: any) {
       setError(err.message || 'Google Sign in failed');
     } finally {
@@ -189,8 +200,52 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
           {/* Form Section - Responsive padding */}
           <div className="px-5 sm:px-8 md:px-10 pb-6 sm:pb-8 md:pb-10">
 
-            {/* Verification View */}
-            {view === 'verify' ? (
+            {/* Phone Collection View (for Google users) */}
+            {view === 'collect-phone' ? (
+              <div className="animate-fade-in">
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-emerald-100">
+                    <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-lg font-bold text-slate-900 mb-1">Add Your Phone Number</h2>
+                  <p className="text-sm text-slate-500">Please provide your phone number to complete registration</p>
+                </div>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setError('');
+                  setIsLoading(true);
+                  try {
+                    const result = await requestVerificationCode(phoneNumber);
+                    if (result.dev_code) {
+                      setDevCode(result.dev_code);
+                    }
+                    startResendTimer();
+                    setView('verify');
+                  } catch (err: any) {
+                    setError(err.message || 'Failed to send verification code');
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-2">Phone Number</label>
+                    <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full px-4 py-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all text-sm" placeholder="+251 9XX XXX XXX" disabled={isLoading} autoFocus />
+                  </div>
+                  {error && (
+                    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+                      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                      <span className="text-sm text-red-700">{error}</span>
+                    </div>
+                  )}
+                  <button type="submit" disabled={isLoading || !phoneNumber.trim()} className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isLoading ? 'Sending Code...' : 'Continue & Verify'}
+                  </button>
+                  <button type="button" onClick={() => pendingUser && onLogin(pendingUser)} className="w-full py-2 text-sm text-slate-500 hover:text-slate-700">Skip for now</button>
+                </form>
+              </div>
+            ) : view === 'verify' ? (
               <div className="animate-fade-in">
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-emerald-100">
@@ -201,6 +256,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, language, onLanguageChan
                   <h2 className="text-lg font-bold text-slate-900 mb-1">Verify Your Phone</h2>
                   <p className="text-sm text-slate-500">We sent a verification code to</p>
                   <p className="text-sm font-semibold text-emerald-600">{phoneNumber}</p>
+
+                  {/* Dev Mode Code Display */}
+                  {devCode && (
+                    <div className="mt-4 p-3 bg-amber-50 border-2 border-amber-200 rounded-xl">
+                      <p className="text-xs text-amber-600 font-medium mb-1">🔧 Development Mode</p>
+                      <p className="text-2xl font-bold text-amber-700 tracking-widest">{devCode}</p>
+                    </div>
+                  )}
                 </div>
 
                 <form onSubmit={handleVerifyCode} className="space-y-4">

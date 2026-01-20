@@ -69,7 +69,7 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     }
 };
 
-export const loginWithGoogle = async (): Promise<User> => {
+export const loginWithGoogle = async (): Promise<User & { needs_phone_number?: boolean }> => {
     try {
         // Import Firebase auth dynamically
         const { signInWithPopup } = await import('firebase/auth');
@@ -102,14 +102,18 @@ export const loginWithGoogle = async (): Promise<User> => {
         }
 
         const data = await res.json();
+        console.log('Backend Google login response:', data);
         localStorage.setItem('token', data.access_token);
-        return {
+        const userResult = {
             id: data.user_id.toString(),
             username: data.username,
             createdAt: new Date(),
-            authProvider: 'google',
-            balance: 0
+            authProvider: 'google' as const,
+            balance: 0,
+            needs_phone_number: data.needs_phone_number || false
         };
+        console.log('Returning user object:', userResult);
+        return userResult;
     } catch (error: any) {
         console.error('Google login error:', error);
         if (error.code === 'auth/popup-closed-by-user') {
@@ -162,7 +166,7 @@ export const observeAuthState = (callback: (user: User | null) => void) => {
 
 // --- PHONE VERIFICATION ---
 
-export const requestVerificationCode = async (phoneNumber: string): Promise<{ message: string; expires_in: number }> => {
+export const requestVerificationCode = async (phoneNumber: string): Promise<{ message: string; expires_in: number; dev_code?: string }> => {
     const res = await fetch(`${API_URL}/auth/request-verification`, {
         method: 'POST',
         headers: getAuthHeaders(),
