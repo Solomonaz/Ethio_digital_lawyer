@@ -108,15 +108,49 @@ def get_search_cost(db: Session) -> float:
 @app.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
+    import re
+    
+    # Validate email format
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_regex, user_data.email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Validate phone number format (Ethiopian numbers - Ethiotelecom & Safaricom)
+    phone = user_data.phone_number.strip()
+    if phone:
+        # Remove spaces, dashes, and parentheses
+        phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
+        
+        # Valid Ethiopian phone formats:
+        # +2519XXXXXXXX (Ethiotelecom) - 13 chars
+        # +2517XXXXXXXX (Safaricom) - 13 chars  
+        # 2519XXXXXXXX or 2517XXXXXXXX - 12 chars
+        # 09XXXXXXXX or 07XXXXXXXX - 10 chars
+        # 9XXXXXXXX or 7XXXXXXXX - 9 chars
+        if not re.match(r'^(\+251|251|0)?[79]\d{8}$', phone_clean):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid phone number format. Use: +251 9XX XXX XXX (Ethiotelecom) or +251 7XX XXX XXX (Safaricom)"
+            )
+    
     # Extract username from email (part before @)
     username = user_data.email.split('@')[0]
     
-    # Check if user exists by email or username
-    existing_user = db.query(User).filter(
-        (User.email == user_data.email) | (User.username == username)
-    ).first()
-    if existing_user:
+    # Check if email already exists
+    existing_email = db.query(User).filter(User.email == user_data.email).first()
+    if existing_email:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if username already exists
+    existing_username = db.query(User).filter(User.username == username).first()
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken. Please use a different email.")
+    
+    # Check if phone number already exists (if provided)
+    if phone:
+        existing_phone = db.query(User).filter(User.phone_number == phone).first()
+        if existing_phone:
+            raise HTTPException(status_code=400, detail="Phone number already registered")
     
     # Create new user
     hashed_password = get_password_hash(user_data.password)
@@ -209,11 +243,15 @@ async def google_login(google_data: dict, db: Session = Depends(get_db)):
     
     access_token = create_access_token(data={"sub": user.username})
     
+    # Check if user needs to provide phone number
+    needs_phone = user.phone_number is None or user.phone_number == ""
+    
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user_id": user.id,
-        "username": user.username
+        "username": user.username,
+        "needs_phone_number": needs_phone
     }
 
 @app.get("/users/me")
@@ -244,7 +282,7 @@ async def request_verification_code(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Request a verification code to be sent via Telegram"""
+    """Request a verification code to be sent via Telegram (or shown in dev mode)"""
     phone_number = data.phone_number.strip()
     
     if not phone_number:
@@ -262,14 +300,35 @@ async def request_verification_code(
     current_user.verification_code_expires = expires_at
     db.commit()
     
-    # Send code via Telegram
-    success = TelegramService.send_verification_code(phone_number, code)
+    # ALWAYS print code to console for development convenience
+    print(f"\n{'='*50}")
+    print(f"📱 VERIFICATION CODE for {phone_number}")
+    print(f"   Code: {code}")
+    print(f"{'='*50}\n")
     
-    if success:
-        return {"message": "Verification code sent successfully", "expires_in": 300}
+    # Check if Telegram Gateway is configured
+    telegram_token = os.getenv("TELEGRAM_GATEWAY_API_TOKEN")
+    
+    if telegram_token:
+        # Try to send via Telegram
+        success = TelegramService.send_verification_code(phone_number, code)
+        if success:
+            return {"message": "Verification code sent to your phone", "expires_in": 300}
+        else:
+            # Telegram failed - return dev_code as fallback
+            print(f"[FALLBACK] Telegram failed. Use the code printed above.")
+            return {
+                "message": "Telegram unavailable - use the code shown in the console",
+                "expires_in": 300,
+                "dev_code": code
+            }
     else:
-        # Still return success for dev mode (code printed to console)
-        return {"message": "Verification code sent (check console if in dev mode)", "expires_in": 300}
+        # No Telegram token - development mode
+        return {
+            "message": "Development mode - use the code shown below",
+            "expires_in": 300,
+            "dev_code": code
+        }
 
 @app.post("/auth/verify-phone")
 async def verify_phone_code(
@@ -324,6 +383,14 @@ async def initialize_payment(
     """Initialize a Chapa payment for balance recharge"""
     tx_ref = f"ethiolex-{uuid.uuid4().hex[:12]}"
     
+    # Check if Chapa key is configured
+    chapa_key = os.getenv("CHAPA_SECRET_KEY")
+    if not chapa_key:
+        print("[ERROR] CHAPA_SECRET_KEY not configured!")
+        raise HTTPException(status_code=500, detail="Payment service not configured")
+    
+    print(f"[PAYMENT] Initializing payment for {request.email}, amount: {request.amount} ETB")
+    
     result = ChapaService.initialize_payment(
         email=request.email,
         amount=request.amount,
@@ -333,8 +400,12 @@ async def initialize_payment(
         return_url=f"http://localhost:5173/payment/callback?tx_ref={tx_ref}"
     )
     
+    print(f"[PAYMENT] Chapa response: {result}")
+    
     if not result or result.get("status") != "success":
-        raise HTTPException(status_code=400, detail="Failed to initialize payment")
+        error_msg = result.get("message", "Unknown error") if result else "No response from Chapa"
+        print(f"[PAYMENT ERROR] {error_msg}")
+        raise HTTPException(status_code=400, detail=f"Payment initialization failed: {error_msg}")
     
     # Save payment record
     new_payment = Payment(
