@@ -6,6 +6,7 @@ interface AdminUser {
     username: string;
     email: string;
     balance: number;
+    total_cost?: number; // Added for Cost Tracking
     is_admin: boolean;
     is_active: boolean;
     created_at: string;
@@ -176,7 +177,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         totalUsers: users.length,
         activeUsers: users.filter(u => u.is_active).length,
         pendingPayments: payments.filter(p => p.status === 'pending').length,
-        totalRevenue: payments.filter(p => p.status === 'success').reduce((sum, p) => sum + p.amount, 0)
+        totalRevenue: payments.filter(p => p.status === 'success').reduce((sum, p) => sum + p.amount, 0),
+        totalSystemCost: users.reduce((sum, u) => sum + (u.total_cost || 0), 0)
     };
 
     return (
@@ -201,7 +203,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
             <div className="max-w-7xl mx-auto px-6 py-8">
                 {/* Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
                         <div className="text-slate-500 text-sm font-medium mb-1">👥 {t('totalUsers')}</div>
                         <div className="text-3xl font-bold text-slate-900">{stats.totalUsers}</div>
@@ -216,7 +218,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                     </div>
                     <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
                         <div className="text-slate-500 text-sm font-medium mb-1">📈 {t('revenue')}</div>
-                        <div className="text-3xl font-bold text-purple-600">{stats.totalRevenue} <span className="text-base text-slate-400">ETB</span></div>
+                        <div className="text-3xl font-bold text-purple-600">{stats.totalRevenue.toFixed(0)} <span className="text-base text-slate-400">ETB</span></div>
+                    </div>
+                    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm border-l-4 border-l-red-400">
+                        <div className="text-slate-500 text-sm font-medium mb-1">💸 Total API Cost</div>
+                        <div className="text-3xl font-bold text-slate-700">{stats.totalSystemCost.toFixed(2)} <span className="text-base text-slate-400">ETB</span></div>
                     </div>
                 </div>
 
@@ -244,6 +250,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('username')}</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('email')}</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('balance')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Est. Cost</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('status')}</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('actions')}</th>
                                 </tr>
@@ -270,6 +277,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                             <div className="flex items-center gap-2">
                                                 <input type="number" defaultValue={u.balance || 0} className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 text-sm focus:ring-2 focus:ring-green-500" onBlur={(e) => updateBalance(u.id, e.target.value)} />
                                                 <span className="text-slate-400 text-sm">ETB</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="font-mono text-sm text-slate-600 font-bold">
+                                                {(u.total_cost || 0).toFixed(4)} ETB
                                             </div>
                                         </td>
                                         <td className="p-4">

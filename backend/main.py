@@ -1,12 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime
 import os
 from dotenv import load_dotenv
 import base64
+import re
 
 from database import engine, Base, get_db
 from models import User, Chat, ChatMessage, Payment, Setting
@@ -30,27 +32,38 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="EthioLex Backend API")
 
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- RATE LIMITER SETUP ---
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-# Security Headers Middleware
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- SECURITY HEADERS MIDDLEWARE ---
 @app.middleware("http")
-async def add_security_headers(request, call_next):
+async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    # Content Security Policy (Basic default, can be customized per endpoint if needed)
+    # Content Security Policy
+    # Note: connect-src needs to include the API URL
     response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com;"
     return response
+
+# --- CORS MIDDLEWARE ---
+# Must be added LAST (runs FIRST) to handle OPTIONS requests before other middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Configure Gemini Client
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -306,7 +319,9 @@ import random
 from datetime import timedelta
 
 @app.post("/auth/request-verification")
+@limiter.limit("3/hour")
 async def request_verification_code(
+    request: Request, # Request object is required for slowapi
     data: RequestVerificationCode,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -360,7 +375,9 @@ async def request_verification_code(
         }
 
 @app.post("/auth/verify-phone")
+@limiter.limit("5/minute")
 async def verify_phone_code(
+    request: Request, # Request object is required for slowapi
     data: VerifyPhoneCode,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -516,20 +533,29 @@ async def get_user_chats(current_user: User = Depends(get_current_user), db: Ses
     result = []
     for chat in chats:
         messages = db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).order_by(ChatMessage.timestamp).all()
+        
+        # Strip the "limited free search" warning if user has balance
+        cleaned_messages = []
+        for msg in messages:
+            content = msg.content
+            # Define the warning text to remove
+            if current_user.balance > 0:
+                # Robust regex removal of validity warning (handles variations in whitespace)
+                content = re.sub(r'\s*\*This is a limited free search\. Please recharge your account for a robust and complete response\.\*\s*', '', content).strip()
+            
+            cleaned_messages.append({
+                "id": msg.id,
+                "role": msg.role,
+                "content": content,
+                "timestamp": msg.timestamp.isoformat()
+            })
+
         result.append({
             "id": str(chat.id),
             "user_id": chat.user_id,
             "title": chat.title,
             "updated_at": chat.updated_at.isoformat(),
-            "messages": [
-                {
-                    "id": msg.id,
-                    "role": msg.role,
-                    "content": msg.content,
-                    "timestamp": msg.timestamp.isoformat()
-                }
-                for msg in messages
-            ]
+            "messages": cleaned_messages
         })
     
     return result
@@ -598,8 +624,9 @@ async def send_message(
         ChatMessage.role == "user"
     ).count()
 
-    # Free Search Logic (First 2 searches are free)
-    is_free_search = user_message_count < 2
+    # Free Search Logic (First 2 searches are free ONLY if balance is zero)
+    # If user has balance, they pay and get full service immediately
+    is_free_search = user_message_count < 2 and current_user.balance <= 0
     
     if not is_free_search:
         # Check User Balance (Cost from settings)
@@ -646,9 +673,14 @@ async def send_message(
         # Build conversation history using new SDK types
         contents = []
         for msg in chat_history[:-1]:  # Exclude the message we just added
+            # Clean context if user has balance (prevents hallucinating the limit warning)
+            msg_content = msg.content
+            if current_user.balance > 0:
+                 msg_content = re.sub(r'\s*\*This is a limited free search\. Please recharge your account for a robust and complete response\.\*\s*', '', msg_content).strip()
+            
             contents.append(types.Content(
                 role=msg.role if msg.role != "model" else "model",
-                parts=[types.Part.from_text(text=msg.content)]
+                parts=[types.Part.from_text(text=msg_content)]
             ))
         
         # Handle current message with attachments
@@ -689,12 +721,24 @@ async def send_message(
         
         # Send message using the new SDK
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
+            # model="gemini-2.0-flash",
+            model="gemini-3-pro-preview",
             contents=contents,
             config=generation_config
         )
         
         bot_text = response.text
+        
+        # Handle cases where response.text is None (e.g. Safety Filters or Model Error)
+        if not bot_text:
+            bot_text = "I apologize, but I am unable to generate a response to this query. It may have been blocked by safety filters or the model is momentarily unavailable. Please try rephrasing your question."
+        
+        # Anti-Hallucination: Strip the warning if user has balance
+        # (Gemini might repeat it from history context even if not instructed to)
+        if current_user.balance > 0:
+            bot_text = bot_text.replace("*This is a limited free search. Please recharge your account for a robust and complete response.*", "")
+            # Also clean up any trailing newlines left
+            bot_text = bot_text.strip()
         
         # Extract grounding sources if available
         grounding_sources = []
@@ -736,6 +780,39 @@ async def send_message(
         print(f"Gemini API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
+    finally:
+        # --- COST TRACKING ---
+        if 'response' in locals() and hasattr(response, 'usage_metadata'):
+            try:
+                usage = response.usage_metadata
+                if usage:
+                    # Token counts
+                    p_tokens = usage.prompt_token_count
+                    c_tokens = usage.candidates_token_count
+                    
+                    # Update DB record with usage
+                    # Note: We need to find the bot_message again or use the one we just added
+                    # Since we did db.refresh(bot_message), it should have an ID.
+                    if 'bot_message' in locals() and bot_message.id:
+                        # Cost Calculation (ETB)
+                        # Flash Cost: ~12 ETB/1M Input, ~48 ETB/1M Output
+                        cost = (p_tokens / 1_000_000 * 12) + (c_tokens / 1_000_000 * 48)
+                        
+                        bot_message.input_tokens = p_tokens
+                        bot_message.output_tokens = c_tokens
+                        bot_message.estimated_cost = cost
+                        db.commit()
+                        
+                        # Terminal Log (Requested by User)
+                        print(f"\n{'='*20} COST ALERT {'='*20}")
+                        print(f"User: {current_user.username}")
+                        print(f"Input Tokens: {p_tokens}")
+                        print(f"Output Tokens: {c_tokens}")
+                        print(f"Est. Cost: {cost:.4f} ETB")
+                        print(f"{'='*52}\n")
+            except Exception as e:
+                print(f"[COST LOG ERROR] Could not save cost: {e}")
+
 # --- ADMIN ENDPOINTS ---
 
 @app.get("/admin/users")
@@ -745,15 +822,27 @@ async def admin_get_users(
 ):
     """Get all users (Admin only)"""
     users = db.query(User).all()
-    return [{
-        "id": u.id,
-        "username": u.username,
-        "email": u.email,
-        "balance": u.balance,
-        "is_admin": u.is_admin,
-        "is_active": u.is_active if u.is_active is not None else True,
-        "created_at": u.created_at.isoformat() if u.created_at else None
-    } for u in users]
+    
+    user_list = []
+    for u in users:
+        # Calculate total cost for user (sum of estimated_cost in user's chat messages)
+        # Detailed join: User -> Chat -> ChatMessage
+        total_cost = db.query(func.sum(ChatMessage.estimated_cost)).\
+            join(Chat, ChatMessage.chat_id == Chat.id).\
+            filter(Chat.user_id == u.id).scalar() or 0.0
+            
+        user_list.append({
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "balance": u.balance,
+            "total_cost": total_cost, # Added for Admin Dashboard
+            "is_admin": u.is_admin,
+            "is_active": u.is_active if u.is_active is not None else True,
+            "created_at": u.created_at.isoformat() if u.created_at else None
+        })
+        
+    return user_list
 
 @app.put("/admin/users/{user_id}/balance")
 async def admin_update_balance(
