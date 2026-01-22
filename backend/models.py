@@ -48,6 +48,11 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
     
+    # Cost Tracking
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    estimated_cost = Column(Float, default=0.0)
+    
     # Relationships
     chat = relationship("Chat", back_populates="messages")
 

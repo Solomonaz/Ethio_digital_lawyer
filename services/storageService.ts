@@ -1,7 +1,8 @@
 import { User, ChatSession, Message, Language, Attachment } from '../types';
 
 // API Base URL (Relative because of Vite Proxy)
-const API_URL = '/api';
+// API Base URL (Relative because of Vite Proxy)
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // --- AUTH ---
 

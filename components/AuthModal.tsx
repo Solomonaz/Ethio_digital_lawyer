@@ -309,7 +309,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin }) => {
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('phoneNumber')}</label>
-                          <input type="tel" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all" placeholder={t('phonePlaceholder')} disabled={isLoading} />
+                          <input type="tel" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all" placeholder={t('phone')} disabled={isLoading} />
                         </div>
                       </div>
                     )}
