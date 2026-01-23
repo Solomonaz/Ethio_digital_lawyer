@@ -19,26 +19,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'account' | 'billing'>('account');
-    const [searchCost, setSearchCost] = useState<number>(0);
 
-    // Fetch search cost from backend
-    useEffect(() => {
-        const fetchSearchCost = async () => {
-            try {
-                const response = await fetch('http://localhost:8000/settings/search-cost');
-                if (response.ok) {
-                    const data = await response.json();
-                    setSearchCost(data.search_cost);
-                }
-            } catch (error) {
-                console.error('Failed to fetch search cost:', error);
-                setSearchCost(30); // Default fallback
-            }
-        };
-        if (isOpen) {
-            fetchSearchCost();
-        }
-    }, [isOpen]);
+
+
 
     if (!isOpen) return null;
 
@@ -208,7 +191,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                             {/* Pricing Info */}
                             <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pricing')}</h4>
+                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pricingss')}</h4>
                                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
                                     <div className="flex items-start gap-3">
                                         <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
@@ -217,8 +200,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-medium text-amber-800">{t('costPerQuery', { cost: searchCost })}</p>
-                                            <p className="text-sm text-amber-700 mt-1">{t('costDescription', { cost: searchCost })}</p>
+                                            <p className="text-sm font-medium text-amber-800">{t('costPerQuery')}</p>
+                                            <p className="text-sm text-amber-700 mt-1">{t('costDescription')}</p>
                                         </div>
                                     </div>
                                 </div>

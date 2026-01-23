@@ -52,10 +52,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
     };
 
     const quickAmounts = [
-        { value: '50', label: '50', queries: '~1-2' },
-        { value: '100', label: '100', queries: '~3-4' },
-        { value: '200', label: '200', queries: '~6-7' },
-        { value: '500', label: '500', queries: '~16+' }
+        { value: '50', label: '50', queries: 'ብር' },
+        { value: '100', label: '100', queries: 'ብር' },
+        { value: '200', label: '200', queries: 'ብር' },
+        { value: '500', label: '500', queries: 'ብር' }
     ];
 
     return (
@@ -125,7 +125,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
                             >
                                 <span className="text-sm font-bold">{item.label}</span>
                                 <span className={`block text-[9px] mt-0.5 ${amount === item.value ? 'text-emerald-100' : 'text-slate-400'}`}>
-                                    {item.queries} {t('queries')}
+                                    {item.queries}
                                 </span>
                             </button>
                         ))}
