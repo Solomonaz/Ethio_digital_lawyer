@@ -39,7 +39,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [payments, setPayments] = useState<AdminPayment[]>([]);
     const [settings, setSettings] = useState<AdminSetting[]>([]);
-    const [searchCost, setSearchCost] = useState('30');
+
+    // Model Pricing State
+    const [modelName, setModelName] = useState('gemini-3-pro-preview');
+    const [inputCost, setInputCost] = useState('240');
+    const [outputCost, setOutputCost] = useState('1440');
+    const [minBalance, setMinBalance] = useState('10.0');
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -100,8 +106,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             if (!res.ok) throw new Error('Failed to fetch settings');
             const data = await res.json();
             setSettings(data);
-            const costSetting = data.find((s: AdminSetting) => s.key === 'search_cost');
-            if (costSetting) setSearchCost(costSetting.value);
+
+
+            // Parse settings into state
+            const modelSetting = data.find((s: AdminSetting) => s.key === 'model_name');
+            if (modelSetting) setModelName(modelSetting.value);
+
+            const inputSetting = data.find((s: AdminSetting) => s.key === 'cost_input_1m');
+            if (inputSetting) setInputCost(inputSetting.value);
+
+            const outputSetting = data.find((s: AdminSetting) => s.key === 'cost_output_1m');
+            if (outputSetting) setOutputCost(outputSetting.value);
+
+            const minBalanceSetting = data.find((s: AdminSetting) => s.key === 'min_search_balance');
+            if (minBalanceSetting) setMinBalance(minBalanceSetting.value);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -162,15 +180,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         } catch (err: any) { setError(err.message); }
     };
 
-    const updateSearchCost = async () => {
+    const saveModelSettings = async () => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/admin/settings/search_cost`, {
-                method: 'PUT', headers, body: JSON.stringify({ value: searchCost, description: 'Cost in ETB per search' })
+            setLoading(true);
+            // 1. Model Name
+            await fetch(`http://127.0.0.1:8000/admin/settings/model_name`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: modelName, description: 'Active AI Model Name' })
             });
-            if (!res.ok) throw new Error('Failed to update');
-            setSuccess('Search cost updated!');
+            // 2. Input Cost
+            await fetch(`http://127.0.0.1:8000/admin/settings/cost_input_1m`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: inputCost, description: 'Cost in ETB per 1 Million Input Tokens' })
+            });
+            // 3. Output Cost
+            await fetch(`http://127.0.0.1:8000/admin/settings/cost_output_1m`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: outputCost, description: 'Cost in ETB per 1 Million Output Tokens' })
+            });
+            // 4. Min Balance
+            await fetch(`http://127.0.0.1:8000/admin/settings/min_search_balance`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: minBalance, description: 'Minimum Balance Required to Search' })
+            });
+
+            setSuccess('Pricing settings saved successfully!');
             fetchSettings();
-        } catch (err: any) { setError(err.message); }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const stats = {
@@ -348,18 +384,77 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                         </table>
                     ) : (
                         <div className="p-8">
-                            <div className="max-w-md">
-                                <h2 className="text-lg font-bold text-slate-800 mb-6">⚙️ {t('appSettings')}</h2>
-                                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                                    <label className="block text-sm font-medium text-slate-700 mb-3">{t('searchCostParam')}</label>
-                                    <div className="flex gap-3">
-                                        <div className="relative flex-1">
-                                            <input type="number" value={searchCost} onChange={(e) => setSearchCost(e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-3 text-slate-800 text-lg font-bold focus:ring-2 focus:ring-green-500" />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">ETB</span>
-                                        </div>
-                                        <button onClick={updateSearchCost} className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-sm">{t('save')}</button>
+                            <div className="max-w-2xl">
+                                <h2 className="text-lg font-bold text-slate-800 mb-6">⚙️ Model & Pricing Configuration</h2>
+                                <div className="bg-slate-50 rounded-xl p-6 border border-slate-200 space-y-6">
+
+                                    {/* Model Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Active Model Name</label>
+                                        <input
+                                            type="text"
+                                            value={modelName}
+                                            onChange={(e) => setModelName(e.target.value)}
+                                            className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 focus:ring-2 focus:ring-green-500"
+                                            placeholder="e.g. gemini-3-pro-preview"
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">Check Google AI Studio for exact model names.</p>
                                     </div>
-                                    <p className="text-slate-500 text-sm mt-3">{t('searchCostHelp')}</p>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Input Cost */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">Input Cost (per 1M Tokens)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    value={inputCost}
+                                                    onChange={(e) => setInputCost(e.target.value)}
+                                                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
+                                                />
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">Default: ~2.00 USD (240 ETB)</p>
+                                        </div>
+
+                                        {/* Output Cost */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">Output Cost (per 1M Tokens)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    value={outputCost}
+                                                    onChange={(e) => setOutputCost(e.target.value)}
+                                                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
+                                                />
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">Default: ~12.00 USD (1440 ETB)</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-200 mt-4">
+                                        <h3 className="text-sm font-bold text-slate-800 mb-3">Balance Requirements</h3>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">Minimum Balance to Search</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    value={minBalance}
+                                                    onChange={(e) => setMinBalance(e.target.value)}
+                                                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
+                                                />
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">Users must have at least this amount to start a new search.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-200">
+                                        <button onClick={saveModelSettings} className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors shadow-sm w-full md:w-auto">
+                                            Save Configuration
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

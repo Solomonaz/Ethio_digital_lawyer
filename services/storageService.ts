@@ -287,6 +287,14 @@ export const sendMessageToBackend = async (
         if (!res.ok) {
             const errorText = await res.text();
             console.error('Send message error:', errorText);
+            try {
+                const errorData = JSON.parse(errorText);
+                if (errorData.detail) {
+                    throw new Error(errorData.detail);
+                }
+            } catch (e) {
+                // If parsing fails or no detail, fall through
+            }
             throw new Error('Failed to send message');
         }
 

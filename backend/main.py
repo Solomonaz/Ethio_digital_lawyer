@@ -139,11 +139,19 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
     return current_user
 
 # --- Helper: Get search cost from settings ---
+# --- Helper: Get search cost from settings ---
 def get_search_cost(db: Session) -> float:
     setting = db.query(Setting).filter(Setting.key == "search_cost").first()
     if setting:
         return float(setting.value)
     return 30.0  # Default
+
+# --- Helper: Get minimum balance from settings ---
+def get_min_balance(db: Session) -> float:
+    setting = db.query(Setting).filter(Setting.key == "min_search_balance").first()
+    if setting:
+        return float(setting.value)
+    return 10.0  # Default
 
 # --- AUTH ENDPOINTS ---
 
@@ -628,19 +636,20 @@ async def send_message(
     # If user has balance, they pay and get full service immediately
     is_free_search = user_message_count < 2 and current_user.balance <= 0
     
-    if not is_free_search:
-        # Check User Balance (Cost from settings)
-        search_cost = get_search_cost(db)
-        if current_user.balance < search_cost:
-            raise HTTPException(
-                status_code=402,  # Payment Required
-                detail=f"Insufficient balance. Your current balance is {current_user.balance:.2f} ETB. A search costs {search_cost:.2f} ETB. Please recharge to continue."
-            )
-        
-        # Deduct Search Cost
-        current_user.balance -= search_cost
-        db.commit()
-        db.refresh(current_user)
+    # Dynamic Pricing Logic
+    # 1. Fetch current rates from DB
+    model_name_setting = db.query(Setting).filter(Setting.key == "model_name").first()
+    active_model = model_name_setting.value if model_name_setting else "gemini-3-pro-preview"
+    
+    # 2. Check Minimum Balance
+    # This prevents users with 0 balance from initiating requests
+    MIN_BALANCE = get_min_balance(db)
+    # Only enforce minimum balance if it is NOT a free search
+    if not is_free_search and current_user.balance < MIN_BALANCE:
+         raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient balance. Please recharge your account to continue. Minimum required: {MIN_BALANCE} ETB."
+        )
     
     # Check if this is the first message and update title
     existing_messages_count = db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).count()
@@ -715,14 +724,13 @@ async def send_message(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
-            max_output_tokens=2048,
+            # max_output_tokens=2048,
             system_instruction=SYSTEM_INSTRUCTION
         )
         
         # Send message using the new SDK
         response = gemini_client.models.generate_content(
-            # model="gemini-2.0-flash",
-            model="gemini-3-pro-preview",
+            model=active_model,
             contents=contents,
             config=generation_config
         )
@@ -781,7 +789,7 @@ async def send_message(
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
     finally:
-        # --- COST TRACKING ---
+        # --- COST TRACKING & BALANCE DEDUCTION ---
         if 'response' in locals() and hasattr(response, 'usage_metadata'):
             try:
                 usage = response.usage_metadata
@@ -790,26 +798,43 @@ async def send_message(
                     p_tokens = usage.prompt_token_count
                     c_tokens = usage.candidates_token_count
                     
+                    # Fetch Rates Again (in case they changed during generation, though unlikely)
+                    input_rate_setting = db.query(Setting).filter(Setting.key == "cost_input_1m").first()
+                    output_rate_setting = db.query(Setting).filter(Setting.key == "cost_output_1m").first()
+                    
+                    rate_input = float(input_rate_setting.value) if input_rate_setting else 240.0
+                    rate_output = float(output_rate_setting.value) if output_rate_setting else 1440.0
+                    
+                    # Cost Calculation (ETB)
+                    # Formula: (Tokens / 1,000,000) * Rate_Per_Million
+                    input_cost = (p_tokens / 1_000_000) * rate_input
+                    output_cost = (c_tokens / 1_000_000) * rate_output
+                    total_cost = input_cost + output_cost
+                    
+                    # Deduct from User Balance
+                    # We re-fetch user to get latest state in session
+                    db.refresh(current_user)
+                    
+                    if not is_free_search:
+                        current_user.balance -= total_cost
+                    else:
+                        print(f"[FREE SEARCH] Cost of {total_cost:.4f} ETB waived for user {current_user.username}")
+                    
                     # Update DB record with usage
-                    # Note: We need to find the bot_message again or use the one we just added
-                    # Since we did db.refresh(bot_message), it should have an ID.
                     if 'bot_message' in locals() and bot_message.id:
-                        # Cost Calculation (ETB)
-                        # Flash Cost: ~12 ETB/1M Input, ~48 ETB/1M Output
-                        cost = (p_tokens / 1_000_000 * 12) + (c_tokens / 1_000_000 * 48)
-                        
                         bot_message.input_tokens = p_tokens
                         bot_message.output_tokens = c_tokens
-                        bot_message.estimated_cost = cost
+                        bot_message.estimated_cost = total_cost
                         db.commit()
                         
-                        # Terminal Log (Requested by User)
-                        print(f"\n{'='*20} COST ALERT {'='*20}")
+                        # Terminal Log
+                        print(f"\n{'='*20} COST & CHARGE {'='*20}")
                         print(f"User: {current_user.username}")
-                        print(f"Input Tokens: {p_tokens}")
-                        print(f"Output Tokens: {c_tokens}")
-                        print(f"Est. Cost: {cost:.4f} ETB")
-                        print(f"{'='*52}\n")
+                        print(f"Tokens: {p_tokens} (In) / {c_tokens} (Out)")
+                        print(f"Rates: {rate_input} (In) / {rate_output} (Out)")
+                        print(f"Charged: {total_cost:.4f} ETB")
+                        print(f"New Balance: {current_user.balance:.4f} ETB")
+                        print(f"{'='*56}\n")
             except Exception as e:
                 print(f"[COST LOG ERROR] Could not save cost: {e}")
 
@@ -1004,6 +1029,12 @@ async def get_public_search_cost(db: Session = Depends(get_db)):
     """Get search cost setting (Public)"""
     cost = get_search_cost(db)
     return {"search_cost": cost}
+
+@app.get("/settings/min-balance")
+async def get_public_min_balance(db: Session = Depends(get_db)):
+    """Get minimum balance setting (Public)"""
+    min_balance = get_min_balance(db)
+    return {"min_balance": min_balance}
 
 @app.get("/")
 async def root():
