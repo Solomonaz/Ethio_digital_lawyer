@@ -7,9 +7,10 @@ interface SuccessModalProps {
     title?: string;
     message?: string;
     amount?: number;
+    subscriptionExpiresAt?: string;
 }
 
-const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title, message, amount }) => {
+const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title, message, amount, subscriptionExpiresAt }) => {
     const { t } = useTranslation();
 
     if (!isOpen) return null;
@@ -58,7 +59,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title, mes
                     <p className="text-slate-500 mb-6 text-sm">{message}</p>
 
                     {/* Balance Display */}
-                    {amount !== undefined && (
+                    {!subscriptionExpiresAt && amount !== undefined && (
                         <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-emerald-50 rounded-2xl p-5 mb-6 border border-emerald-100">
                             {/* Decorative gradient */}
                             <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-full blur-2xl"></div>
@@ -74,6 +75,20 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, onClose, title, mes
                                     </span>
                                     <span className="text-sm text-slate-500 font-semibold ml-1">ETB</span>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Subscription Display */}
+                    {subscriptionExpiresAt && (
+                        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-5 mb-6 border border-indigo-100">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                            <div className="relative">
+                                <div className="text-[10px] text-indigo-500 uppercase font-bold tracking-widest mb-2">Active Until</div>
+                                <div className="text-xl font-bold text-indigo-700">
+                                    {new Date(subscriptionExpiresAt).toLocaleString()}
+                                </div>
+                                <div className="text-xs text-indigo-400 mt-1 font-medium">unlimited usage</div>
                             </div>
                         </div>
                     )}

@@ -151,7 +151,8 @@ export const observeAuthState = (callback: (user: User | null) => void) => {
                     authProvider: userData.auth_provider || 'local',
                     balance: userData.balance || 0,
                     is_admin: userData.is_admin || false,
-                    is_verified: userData.is_verified || false
+                    is_verified: userData.is_verified || false,
+                    subscription_expires_at: userData.subscription_expires_at || undefined
                 });
             })
             .catch(error => {
@@ -287,15 +288,21 @@ export const sendMessageToBackend = async (
         if (!res.ok) {
             const errorText = await res.text();
             console.error('Send message error:', errorText);
+
+            // Create error with status for proper handling (e.g., 429 quota exceeded)
+            const error: any = new Error('Failed to send message');
+            error.status = res.status;
+
             try {
                 const errorData = JSON.parse(errorText);
                 if (errorData.detail) {
-                    throw new Error(errorData.detail);
+                    error.message = typeof errorData.detail === 'string' ? errorData.detail : 'daily_limit_reached';
+                    error.detail = errorData.detail;
                 }
             } catch (e) {
-                // If parsing fails or no detail, fall through
+                // If parsing fails, use generic message
             }
-            throw new Error('Failed to send message');
+            throw error;
         }
 
         const d = await res.json();
@@ -304,7 +311,8 @@ export const sendMessageToBackend = async (
             role: d.role,
             text: d.text,
             timestamp: new Date(d.timestamp),
-            groundingSources: d.groundingSources
+            groundingSources: d.groundingSources,
+            quotaInfo: d.quotaInfo // Include quota info for frontend warnings
         };
     } catch (error) {
         console.error('Error sending message:', error);

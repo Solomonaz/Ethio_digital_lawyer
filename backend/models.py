@@ -23,6 +23,9 @@ class User(Base):
     verification_code = Column(String, nullable=True)  # 6-digit code
     verification_code_expires = Column(DateTime, nullable=True)  # Code expiry time
     
+    # Subscription Fields
+    subscription_expires_at = Column(DateTime, nullable=True) # Expiry time for 24h subscription
+
     # Relationships
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
 
@@ -64,6 +67,7 @@ class Payment(Base):
     amount = Column(Float, nullable=False)
     tx_ref = Column(String, unique=True, nullable=False)
     status = Column(String, default="pending")  # pending, success, failed
+    payment_type = Column(String, default="recharge") # recharge, subscription_24h
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -77,3 +81,16 @@ class Setting(Base):
     value = Column(String, nullable=False)
     description = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class UsageLog(Base):
+    __tablename__ = "usage_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    chat_id = Column(Integer, ForeignKey("chats.id"), nullable=True)
+    tokens_input = Column(Integer, default=0)
+    tokens_output = Column(Integer, default=0)
+    cost = Column(Float, default=0.0)
+    model = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    is_subscription_covered = Column(Boolean, default=False)

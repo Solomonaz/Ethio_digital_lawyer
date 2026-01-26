@@ -16,11 +16,18 @@ export interface Message {
   isError?: boolean;
   groundingSources?: GroundingSource[];
   attachments?: Attachment[];
+  quotaInfo?: QuotaInfo; // For subscription users - shows usage stats
 }
 
 export interface GroundingSource {
   title?: string;
   uri?: string;
+}
+
+export interface QuotaInfo {
+  used: number;
+  total: number;
+  percentage: number;
 }
 
 export interface User {
@@ -34,6 +41,7 @@ export interface User {
   is_admin?: boolean;
   is_verified?: boolean;
   needs_phone_number?: boolean;
+  subscription_expires_at?: string;
 }
 
 export interface ChatSession {

@@ -189,6 +189,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </button>
                             </div>
 
+                            {/* Subscription Status */}
+                            {user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-500/25 animate-scale-in">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-sm font-medium text-indigo-100 uppercase tracking-wider">Active Pass</span>
+                                        <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">24H Unlimited</span>
+                                    </div>
+                                    <div className="mb-2">
+                                        <p className="text-indigo-100 text-sm">Expires on</p>
+                                        <p className="text-xl font-bold">
+                                            {new Date(user.subscription_expires_at).toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <div className="text-sm text-indigo-100/80 italic">
+                                        * You have unlimited searches until expiry.
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Pricing Info */}
                             <div className="space-y-4">
                                 <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pricingss')}</h4>
