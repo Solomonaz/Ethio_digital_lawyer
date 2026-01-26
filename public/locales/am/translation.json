@@ -118,5 +118,19 @@
     "actions": "እርምጃዎች",
     "successStatus": "ተሳክቷል",
     "failedStatus": "ከሽፏል",
-    "limitedSearchFooter": "*ይህ የተገደበ ነጻ ፍለጋ ነው። እባክዎ ለተሟላ እና ዝርዝር ምላሽ ሂሳቦን ይሙሉ::*"
+    "limitedSearchFooter": "*ይህ የተገደበ ነጻ ፍለጋ ነው። እባክዎ ለተሟላ እና ዝርዝር ምላሽ ሂሳቦን ይሙሉ::*",
+    "24hPass": "የ24 ሰዓት ፓስ",
+    "payAsYouGo": "እንደ አጠቃቀም ይክፈሉ",
+    "24hPassDesc": "ለ24 ሰዓታት ያልተገደበ ተደራሽነት",
+    "24hPassInfo": "ለሚቀጥሉት 24 ሰዓታት የ AI ጠበቃውን ያለገደብ ይጠቀሙ። ምንም ቶከን አይቀነስም።",
+    "activate24hPass": "የ24 ሰዓት ፓስ አግብር ({{price}} ብር)",
+    "fairUsageTitle": "የፍትሃዊ አጠቃቀም ፖሊሲ",
+    "fairUsageText": "የ24 ሰዓት ፓስ ለሁሉም ተጠቃሚዎች ጥራት ያለው አገልግሎት ለማረጋገጥ ለቀን የተወሰነ የጥያቄ ብዛት ያካትታል። ከመጠን ያለፈ አውቶማቲክ ወይም አላግባብ አጠቃቀም ክልክል ነው።",
+    "fairUsageAgree": "የፍትሃዊ አጠቃቀም ፖሊሲውን እስማማለሁ",
+    "quotaHalfUsed": "ማሳሰቢያ! 50% የቀን ጥያቄዎችዎን ተጠቅመዋል ({{used}}/{{total}})። ቀስ ብለው ይጠቀሙ!",
+    "quotaExhausted": "የዕለት ገደብ ደርሷል",
+    "quotaExhaustedMsg": "ለዛሬ ሁሉንም {{total}} ጥያቄዎች ተጠቅመዋል። ኮታዎ በእኩለ ሌሊት (UTC) ይታደሳል።",
+    "quotaExhaustedOptions": "አሁን ለመቀጠል፡",
+    "quotaOptionSubscribe": "ሌላ የ24 ሰዓት ፓስ ይግዙ",
+    "quotaOptionPayAsYouGo": "ወደ እንደ አጠቃቀም ይክፈሉ ይቀይሩ (ቀን ገደብ የለም)"
 }

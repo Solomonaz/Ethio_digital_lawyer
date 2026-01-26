@@ -225,8 +225,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <div className="animate-fade-in">
                       <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.username}</p>
                       <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        {user.balance?.toLocaleString() || '0'} ETB
+                        <span className={`w-1.5 h-1.5 rounded-full ${user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
+                        {user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() ? (
+                          (() => {
+                            const diff = new Date(user.subscription_expires_at).getTime() - new Date().getTime();
+                            const hrs = Math.floor(diff / (1000 * 60 * 60));
+                            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                            return `Pro: ${hrs}h ${mins}m left`;
+                          })()
+                        ) : (
+                          `${user.balance?.toLocaleString() || '0'} ETB`
+                        )}
                       </p>
                     </div>
                   )}

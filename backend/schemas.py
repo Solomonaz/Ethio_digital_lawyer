@@ -24,6 +24,7 @@ class UserResponse(BaseModel):
     auth_provider: str
     balance: float = 0.0
     is_admin: bool = False
+    subscription_expires_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

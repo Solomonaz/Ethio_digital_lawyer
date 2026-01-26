@@ -11,7 +11,7 @@ import base64
 import re
 
 from database import engine, Base, get_db
-from models import User, Chat, ChatMessage, Payment, Setting
+from models import User, Chat, ChatMessage, Payment, Setting, UsageLog
 import uuid
 from schemas import (
     UserCreate, UserLogin, UserResponse, Token,
@@ -152,6 +152,13 @@ def get_min_balance(db: Session) -> float:
     if setting:
         return float(setting.value)
     return 10.0  # Default
+
+# --- Helper: Get subscription daily quota from settings ---
+def get_subscription_daily_quota(db: Session) -> int:
+    setting = db.query(Setting).filter(Setting.key == "subscription_daily_quota").first()
+    if setting:
+        return int(setting.value)
+    return 100  # Default: 100 questions per day
 
 # --- AUTH ENDPOINTS ---
 
@@ -313,11 +320,12 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "name": current_user.name,
         "email": current_user.email,
         "phone_number": current_user.phone_number,
-        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "created_at": (current_user.created_at.isoformat() + "Z") if current_user.created_at else None,
         "auth_provider": current_user.auth_provider,
         "balance": current_user.balance,
         "is_admin": current_user.is_admin,
-        "is_verified": current_user.is_verified
+        "is_verified": current_user.is_verified,
+        "subscription_expires_at": (current_user.subscription_expires_at.isoformat() + "Z") if current_user.subscription_expires_at else None
     }
 
 # --- PHONE VERIFICATION ENDPOINTS ---
@@ -427,6 +435,7 @@ class PaymentInitRequest(PydanticBaseModel):
     email: str
     first_name: str = "EthioLex"
     last_name: str = "User"
+    payment_type: str = "recharge"
 
 @app.post("/payment/initialize")
 async def initialize_payment(
@@ -451,7 +460,11 @@ async def initialize_payment(
         first_name=request.first_name,
         last_name=request.last_name,
         tx_ref=tx_ref,
-        return_url=f"http://localhost:5173/payment/callback?tx_ref={tx_ref}"
+        return_url=f"http://localhost:5173/payment/callback?tx_ref={tx_ref}",
+        customization={
+            "title": "EthioLex Pass" if request.payment_type == "subscription_24h" else "EthioLex Fund",
+            "description": "24-Hour Pass" if request.payment_type == "subscription_24h" else "Balance Recharge"
+        }
     )
     
     print(f"[PAYMENT] Chapa response: {result}")
@@ -466,7 +479,8 @@ async def initialize_payment(
         user_id=current_user.id,
         amount=float(request.amount),
         tx_ref=tx_ref,
-        status="pending"
+        status="pending",
+        payment_type=request.payment_type
     )
     db.add(new_payment)
     db.commit()
@@ -498,10 +512,21 @@ async def verify_payment(
         if data.get("status") == "success":
             payment.status = "success"
             
-            # Credit User Balance
+            # Credit User Balance OR Activate Subscription
             user = db.query(User).filter(User.id == payment.user_id).first()
             if user:
-                user.balance += payment.amount
+                if payment.payment_type == "subscription_24h":
+                    # Extend subscription
+                    # If valid existing subscription, extend from that time, else from now
+                    now = datetime.utcnow()
+                    start_time = now
+                    if user.subscription_expires_at and user.subscription_expires_at > now:
+                        start_time = user.subscription_expires_at
+                    
+                    user.subscription_expires_at = start_time + timedelta(hours=24)
+                    print(f"[SUBSCRIPTION] Activated for user {user.username}, expires: {user.subscription_expires_at}")
+                else:
+                    user.balance += payment.amount
             
             db.commit()
             db.refresh(user)
@@ -521,10 +546,19 @@ async def payment_callback(data: dict, db: Session = Depends(get_db)):
         if payment and payment.status != "success":
             if status_msg == "success":
                 payment.status = "success"
-                # Credit User Balance
+                # Credit User Balance OR Activate Subscription
                 user = db.query(User).filter(User.id == payment.user_id).first()
                 if user:
-                    user.balance += payment.amount
+                    if payment.payment_type == "subscription_24h":
+                         # Extend subscription
+                        now = datetime.utcnow()
+                        start_time = now
+                        if user.subscription_expires_at and user.subscription_expires_at > now:
+                            start_time = user.subscription_expires_at
+                        
+                        user.subscription_expires_at = start_time + timedelta(hours=24)
+                    else:
+                        user.balance += payment.amount
             elif status_msg == "failed":
                 payment.status = "failed"
             db.commit()
@@ -547,7 +581,11 @@ async def get_user_chats(current_user: User = Depends(get_current_user), db: Ses
         for msg in messages:
             content = msg.content
             # Define the warning text to remove
-            if current_user.balance > 0:
+            # Define the warning text to remove
+            # Check for active subscription or balance
+            has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+            
+            if current_user.balance > 0 or has_subscription:
                 # Robust regex removal of validity warning (handles variations in whitespace)
                 content = re.sub(r'\s*\*This is a limited free search\. Please recharge your account for a robust and complete response\.\*\s*', '', content).strip()
             
@@ -632,9 +670,41 @@ async def send_message(
         ChatMessage.role == "user"
     ).count()
 
-    # Free Search Logic (First 2 searches are free ONLY if balance is zero)
-    # If user has balance, they pay and get full service immediately
-    is_free_search = user_message_count < 2 and current_user.balance <= 0
+    # Free Search Logic (First 2 searches are free ONLY if balance is zero and no subscription)
+    # If user has balance OR active subscription, they get full service
+    has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+    is_free_search = user_message_count < 2 and current_user.balance <= 0 and not has_subscription
+    
+    # --- SUBSCRIPTION DAILY QUOTA CHECK ---
+    quota_info = None  # Will be set for subscribers
+    if has_subscription:
+        daily_quota = get_subscription_daily_quota(db)
+        # Count messages sent TODAY by this subscriber (subscription-covered)
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_usage_count = db.query(UsageLog).filter(
+            UsageLog.user_id == current_user.id,
+            UsageLog.is_subscription_covered == True,
+            UsageLog.timestamp >= today_start
+        ).count()
+        
+        # Store quota info for response
+        quota_info = {
+            "used": today_usage_count,
+            "total": daily_quota,
+            "percentage": round((today_usage_count / daily_quota) * 100) if daily_quota > 0 else 0
+        }
+        
+        print(f"[QUOTA] User {current_user.username}: {today_usage_count}/{daily_quota} questions used today ({quota_info['percentage']}%)")
+        
+        if today_usage_count >= daily_quota:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "message": "daily_limit_reached",
+                    "used": today_usage_count,
+                    "total": daily_quota
+                }
+            )
     
     # Dynamic Pricing Logic
     # 1. Fetch current rates from DB
@@ -644,8 +714,8 @@ async def send_message(
     # 2. Check Minimum Balance
     # This prevents users with 0 balance from initiating requests
     MIN_BALANCE = get_min_balance(db)
-    # Only enforce minimum balance if it is NOT a free search
-    if not is_free_search and current_user.balance < MIN_BALANCE:
+    # Only enforce minimum balance if it is NOT a free search AND no subscription
+    if not is_free_search and not has_subscription and current_user.balance < MIN_BALANCE:
          raise HTTPException(
             status_code=402,
             detail=f"Insufficient balance. Please recharge your account to continue. Minimum required: {MIN_BALANCE} ETB."
@@ -682,10 +752,11 @@ async def send_message(
         # Build conversation history using new SDK types
         contents = []
         for msg in chat_history[:-1]:  # Exclude the message we just added
-            # Clean context if user has balance (prevents hallucinating the limit warning)
+            # Clean context if user has balance or subscription
             msg_content = msg.content
-            if current_user.balance > 0:
-                 msg_content = re.sub(r'\s*\*This is a limited free search\. Please recharge your account for a robust and complete response\.\*\s*', '', msg_content).strip()
+            has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+            if current_user.balance > 0 or has_subscription:
+                 msg_content = re.sub(r'\s*\*This is a limited free search\. Please recharge your account for a robust and complete response\.\*\s*', '', msg.content).strip()
             
             contents.append(types.Content(
                 role=msg.role if msg.role != "model" else "model",
@@ -695,10 +766,10 @@ async def send_message(
         # Handle current message with attachments
         current_parts = []
         
-        # Apply Free Search Limitation only if user has no balance
-        # If user has balance, give full response (even if it's their first search)
+        # Apply Free Search Limitation only if user has no balance and no subscription
+        # If user has balance or subscription, give full response
         message_text = message_data.message
-        if is_free_search and current_user.balance <= 0:
+        if is_free_search and current_user.balance <= 0 and not has_subscription:
             message_text += "\n\nIMPORTANT: This is a free trial search. You MUST LIMIT your response. Only provide the relevant legal Article(s) and a very brief explanation. Do NOT provide a robust detailed analysis. END the response with this exact caption: '\n\n*This is a limited free search. Please recharge your account for a robust and complete response.*'"
         
         current_parts.append(types.Part.from_text(text=message_text))
@@ -741,9 +812,9 @@ async def send_message(
         if not bot_text:
             bot_text = "I apologize, but I am unable to generate a response to this query. It may have been blocked by safety filters or the model is momentarily unavailable. Please try rephrasing your question."
         
-        # Anti-Hallucination: Strip the warning if user has balance
+        # Anti-Hallucination: Strip the warning if user has balance or subscription
         # (Gemini might repeat it from history context even if not instructed to)
-        if current_user.balance > 0:
+        if current_user.balance > 0 or has_subscription:
             bot_text = bot_text.replace("*This is a limited free search. Please recharge your account for a robust and complete response.*", "")
             # Also clean up any trailing newlines left
             bot_text = bot_text.strip()
@@ -781,7 +852,8 @@ async def send_message(
             "role": bot_message.role,
             "text": bot_message.content,
             "timestamp": bot_message.timestamp.isoformat(),
-            "groundingSources": grounding_sources if grounding_sources else None
+            "groundingSources": grounding_sources if grounding_sources else None,
+            "quotaInfo": quota_info  # Include quota info for frontend warnings
         }
         
     except Exception as e:
@@ -815,10 +887,27 @@ async def send_message(
                     # We re-fetch user to get latest state in session
                     db.refresh(current_user)
                     
-                    if not is_free_search:
+                    has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+                    
+                    if not is_free_search and not has_subscription:
                         current_user.balance -= total_cost
                     else:
-                        print(f"[FREE SEARCH] Cost of {total_cost:.4f} ETB waived for user {current_user.username}")
+                        reason = "Subscription" if has_subscription else "Free Tier"
+                        print(f"[{reason}] Cost of {total_cost:.4f} ETB waived for user {current_user.username}")
+                    
+                    # Log usage
+                    usage_log = UsageLog(
+                        user_id=current_user.id,
+                        chat_id=chat.id,
+                        tokens_input=p_tokens,
+                        tokens_output=c_tokens,
+                        cost=total_cost,
+                        model=active_model,
+                        timestamp=datetime.utcnow(),
+                        is_subscription_covered=has_subscription
+                    )
+                    db.add(usage_log)
+                    db.commit()
                     
                     # Update DB record with usage
                     if 'bot_message' in locals() and bot_message.id:
@@ -864,7 +953,8 @@ async def admin_get_users(
             "total_cost": total_cost, # Added for Admin Dashboard
             "is_admin": u.is_admin,
             "is_active": u.is_active if u.is_active is not None else True,
-            "created_at": u.created_at.isoformat() if u.created_at else None
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "subscription_expires_at": (u.subscription_expires_at.isoformat() + "Z") if u.subscription_expires_at else None
         })
         
     return user_list
@@ -962,10 +1052,24 @@ async def admin_approve_payment(
     payment.status = "success"
     user = db.query(User).filter(User.id == payment.user_id).first()
     if user:
-        user.balance += payment.amount
+        if payment.payment_type == "subscription_24h":
+            # Activate subscription - same logic as verify_payment
+            now = datetime.utcnow()
+            start_time = now
+            if user.subscription_expires_at and user.subscription_expires_at > now:
+                start_time = user.subscription_expires_at
+            user.subscription_expires_at = start_time + timedelta(hours=24)
+            print(f"[ADMIN APPROVAL] Subscription activated for user {user.username}, expires: {user.subscription_expires_at}")
+        else:
+            # Regular recharge - add to balance
+            user.balance += payment.amount
     
     db.commit()
-    return {"message": "Payment approved", "new_balance": user.balance if user else None}
+    return {
+        "message": "Payment approved", 
+        "new_balance": user.balance if user else None,
+        "subscription_expires_at": (user.subscription_expires_at.isoformat() + "Z") if user and user.subscription_expires_at else None
+    }
 
 @app.put("/admin/payments/{payment_id}/reject")
 async def admin_reject_payment(
@@ -1020,9 +1124,24 @@ async def admin_update_setting(
             setting.description = setting_data["description"]
     
     db.commit()
+    db.commit()
     return {"message": "Setting updated", "key": key, "value": setting.value}
 
 # --- PUBLIC SETTINGS ENDPOINT ---
+
+@app.get("/settings/public")
+async def get_public_settings(db: Session = Depends(get_db)):
+    """Get public settings (Unauthenticated)"""
+    # Define which keys are safe to expose
+    public_keys = ["subscription_24h_price", "min_search_balance", "search_cost"]
+    
+    settings = db.query(Setting).filter(Setting.key.in_(public_keys)).all()
+    
+    return [{
+        "key": s.key,
+        "value": s.value,
+        "description": s.description
+    } for s in settings]
 
 @app.get("/settings/search-cost")
 async def get_public_search_cost(db: Session = Depends(get_db)):

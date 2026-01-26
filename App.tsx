@@ -8,6 +8,7 @@ import PaymentModal from './components/PaymentModal';
 import SuccessModal from './components/SuccessModal';
 import SettingsModal from './components/SettingsModal';
 import AdminDashboard from './components/AdminDashboard';
+import QuotaExhaustedModal from './components/QuotaExhaustedModal';
 import { observeAuthState, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
 import { Message, Language, Attachment, User, ChatSession } from './types';
 
@@ -29,10 +30,12 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [successModal, setSuccessModal] = useState<{ open: boolean; amount?: number; message?: string }>({ open: false });
+  const [successModal, setSuccessModal] = useState<{ open: boolean; amount?: number; message?: string; subscriptionExpiresAt?: string }>({ open: false });
   // const [searchCost, setSearchCost] = useState(30); // REMOVED: Legacy fixed cost
   const [minRequiredBalance, setMinRequiredBalance] = useState(10.0);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [quotaExhaustedModal, setQuotaExhaustedModal] = useState<{ open: boolean; total: number }>({ open: false, total: 0 });
+  const [shownHalfQuotaWarning, setShownHalfQuotaWarning] = useState(false); // Track if 50% warning shown today
 
   useEffect(() => {
     if (toast) {
@@ -78,8 +81,15 @@ const App: React.FC = () => {
                 })
                   .then(r => r.json())
                   .then(userData => {
-                    setCurrentUser(prev => prev ? { ...prev, balance: userData.balance } : null);
-                    setSuccessModal({ open: true, amount: userData.balance, message: t('accountCredited') });
+                    setCurrentUser(prev => prev ? { ...prev, balance: userData.balance, subscription_expires_at: userData.subscription_expires_at } : null);
+
+                    const isSubscription = userData.subscription_expires_at && new Date(userData.subscription_expires_at) > new Date();
+                    setSuccessModal({
+                      open: true,
+                      amount: userData.balance,
+                      message: isSubscription ? 'Unlimited access activated' : t('accountCredited'),
+                      subscriptionExpiresAt: isSubscription ? userData.subscription_expires_at : undefined
+                    });
                   });
               }
             })
@@ -173,6 +183,11 @@ const App: React.FC = () => {
   );
   const sessionIsFree = totalUserMessages < 2;
 
+  // Check if user has an active subscription (for UI rendering)
+  const hasActiveSubscription = currentUser?.subscription_expires_at
+    ? new Date(currentUser.subscription_expires_at) > new Date()
+    : false;
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (isRecording) stopListening();
@@ -180,7 +195,10 @@ const App: React.FC = () => {
     if ((!input.trim() && attachments.length === 0) || isLoading || !currentSession || !currentUser) return;
 
     // Check Minimum Balance (Client Side Pre-check)
-    if (!sessionIsFree && (currentUser.balance || 0) < minRequiredBalance) {
+    // BYPASS if user has an active subscription
+    const hasSubscription = currentUser.subscription_expires_at && new Date(currentUser.subscription_expires_at) > new Date();
+
+    if (!sessionIsFree && !hasSubscription && (currentUser.balance || 0) < minRequiredBalance) {
       setToast({
         message: t('insufficientBalanceMsg', {
           balance: (currentUser.balance || 0).toFixed(2),
@@ -234,7 +252,29 @@ const App: React.FC = () => {
           });
       }
 
+      // Check for quota warnings (50% threshold)
+      if (botResponse.quotaInfo && botResponse.quotaInfo.percentage >= 50 && botResponse.quotaInfo.percentage < 100 && !shownHalfQuotaWarning) {
+        setToast({
+          message: t('quotaHalfUsed', { used: botResponse.quotaInfo.used, total: botResponse.quotaInfo.total }),
+          type: 'info'
+        });
+        setShownHalfQuotaWarning(true);
+      }
+
     } catch (error: any) {
+      // Check if it's a quota exhausted error from backend (429)
+      if (error.status === 429 || (error.message && error.message.includes('daily_limit_reached'))) {
+        // Parse the detail object if available
+        let total = 100; // Default
+        try {
+          if (error.detail && typeof error.detail === 'object') {
+            total = error.detail.total || 100;
+          }
+        } catch { }
+        setQuotaExhaustedModal({ open: true, total });
+        return; // Don't show error message
+      }
+
       // Check if it's an insufficient balance error from backend (402)
       if (error.message && error.message.includes("Insufficient balance")) {
         setToast({
@@ -420,7 +460,21 @@ const App: React.FC = () => {
             onClose={() => setSuccessModal({ open: false })}
             amount={successModal.amount}
             message={successModal.message}
+            subscriptionExpiresAt={successModal.subscriptionExpiresAt}
             title={t('paymentSuccessful')}
+          />
+          <QuotaExhaustedModal
+            isOpen={quotaExhaustedModal.open}
+            onClose={() => setQuotaExhaustedModal({ open: false, total: 0 })}
+            total={quotaExhaustedModal.total}
+            onSubscribe={() => {
+              setQuotaExhaustedModal({ open: false, total: 0 });
+              setIsPaymentModalOpen(true);
+            }}
+            onPayAsYouGo={() => {
+              setQuotaExhaustedModal({ open: false, total: 0 });
+              setIsPaymentModalOpen(true);
+            }}
           />
           <DisclaimerModal
             isOpen={isDisclaimerOpen}
@@ -676,8 +730,8 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {/* Insufficient Balance Warning */}
-                {currentUser && (currentUser.balance || 0) < minRequiredBalance && sessionIsFree === false && (
+                {/* Insufficient Balance Warning - Only show if NO active subscription */}
+                {currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && sessionIsFree === false && (
                   <div className="mb-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 border border-red-100 rounded-2xl flex items-center justify-between gap-4 animate-slide-up">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -708,13 +762,13 @@ const App: React.FC = () => {
                 <div className={`relative flex items-end gap-2 bg-white border-2 rounded-2xl p-2 transition-all shadow-lg ${isRecording
                   ? 'border-red-300 ring-4 ring-red-100'
                   : 'border-slate-200 focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-100'
-                  } ${currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree ? 'opacity-50 pointer-events-none' : ''}`}>
+                  } ${currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree ? 'opacity-50 pointer-events-none' : ''}`}>
 
                   {/* Attachment Button */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="p-3 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all disabled:opacity-50"
-                    disabled={isRecording || (currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
+                    disabled={isRecording || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -728,7 +782,7 @@ const App: React.FC = () => {
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
                       : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
                       }`}
-                    disabled={currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree}
+                    disabled={currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree}
                   >
                     {isRecording ? (
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -748,7 +802,7 @@ const App: React.FC = () => {
                     onChange={adjustTextareaHeight}
                     onKeyDown={handleKeyDown}
                     placeholder={
-                      currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree
+                      currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree
                         ? t('insufficientBalance')
                         : isRecording
                           ? t('listening')
@@ -756,14 +810,14 @@ const App: React.FC = () => {
                     }
                     className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-3 px-2 text-slate-800 placeholder-slate-400 text-sm outline-none"
                     rows={1}
-                    disabled={isLoading || (currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
+                    disabled={isLoading || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
                   />
 
                   {/* Send Button */}
                   <button
                     onClick={() => handleSendMessage()}
-                    disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
-                    className={`p-3 rounded-xl transition-all ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)
+                    disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
+                    className={`p-3 rounded-xl transition-all ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:from-emerald-500 hover:to-emerald-400'
                       }`}

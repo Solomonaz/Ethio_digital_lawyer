@@ -118,5 +118,19 @@
     "actions": "Actions",
     "successStatus": "Success",
     "failedStatus": "Failed",
-    "limitedSearchFooter": "*This is a limited free search. Please recharge your account for a robust and complete response.*"
+    "limitedSearchFooter": "*This is a limited free search. Please recharge your account for a robust and complete response.*",
+    "24hPass": "24-Hour Pass",
+    "payAsYouGo": "Pay-as-you-go",
+    "24hPassDesc": "Unlimited access for 24 hours",
+    "24hPassInfo": "Use the AI lawyer without limit for the next 24 hours. No token deduction.",
+    "activate24hPass": "Activate 24h Pass ({{price}} ETB)",
+    "fairUsageTitle": "Fair Usage Policy",
+    "fairUsageText": "The 24-hour pass includes a generous daily limit of questions to ensure quality service for all users. Excessive automated or abusive usage is prohibited.",
+    "fairUsageAgree": "I agree to the Fair Usage Policy",
+    "quotaHalfUsed": "Heads up! You've used 50% of your daily questions ({{used}}/{{total}}). Pace yourself!",
+    "quotaExhausted": "Daily Limit Reached",
+    "quotaExhaustedMsg": "You've used all {{total}} questions for today. Your quota resets at midnight UTC.",
+    "quotaExhaustedOptions": "To continue now, you can:",
+    "quotaOptionSubscribe": "Buy another 24-Hour Pass",
+    "quotaOptionPayAsYouGo": "Switch to Pay-as-you-go (no daily limit)"
 }

@@ -10,6 +10,7 @@ interface AdminUser {
     is_admin: boolean;
     is_active: boolean;
     created_at: string;
+    subscription_expires_at?: string; // For 24h subscriber detection
 }
 
 interface AdminPayment {
@@ -45,6 +46,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const [inputCost, setInputCost] = useState('240');
     const [outputCost, setOutputCost] = useState('1440');
     const [minBalance, setMinBalance] = useState('10.0');
+    const [subPrice, setSubPrice] = useState('100'); // Default subscription price
+    const [dailyQuota, setDailyQuota] = useState('100'); // Default subscriber daily limit
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -120,6 +123,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
             const minBalanceSetting = data.find((s: AdminSetting) => s.key === 'min_search_balance');
             if (minBalanceSetting) setMinBalance(minBalanceSetting.value);
+
+            const subPriceSetting = data.find((s: AdminSetting) => s.key === 'subscription_24h_price');
+            if (subPriceSetting) setSubPrice(subPriceSetting.value);
+
+            const dailyQuotaSetting = data.find((s: AdminSetting) => s.key === 'subscription_daily_quota');
+            if (dailyQuotaSetting) setDailyQuota(dailyQuotaSetting.value);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -198,6 +207,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             // 4. Min Balance
             await fetch(`http://127.0.0.1:8000/admin/settings/min_search_balance`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: minBalance, description: 'Minimum Balance Required to Search' })
+            });
+            // 5. Subscription Price
+            await fetch(`http://127.0.0.1:8000/admin/settings/subscription_24h_price`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: subPrice, description: 'Price for 24-hour subscription (ETB)' })
+            });
+            // 6. Subscriber Daily Quota
+            await fetch(`http://127.0.0.1:8000/admin/settings/subscription_daily_quota`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: dailyQuota, description: 'Maximum questions per day for 24h subscribers' })
             });
 
             setSuccess('Pricing settings saved successfully!');
@@ -285,6 +302,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                 <tr>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('username')}</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('email')}</th>
+                                    <th className="text-left p-4 text-slate-600 font-semibold text-sm">Plan Type</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('balance')}</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">Est. Cost</th>
                                     <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('status')}</th>
@@ -309,6 +327,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                             </div>
                                         </td>
                                         <td className="p-4 text-slate-600">{u.email || <span className="text-slate-400">—</span>}</td>
+                                        <td className="p-4">
+                                            {(() => {
+                                                // Debug log
+                                                console.log(`User ${u.username}: subscription_expires_at =`, u.subscription_expires_at);
+
+                                                if (!u.subscription_expires_at) {
+                                                    return (
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5"></span>
+                                                            Pay as you go
+                                                        </span>
+                                                    );
+                                                }
+
+                                                const expiresAt = new Date(u.subscription_expires_at);
+                                                const now = new Date();
+                                                const hasActiveSub = expiresAt > now;
+
+                                                console.log(`  -> Expires: ${expiresAt.toISOString()}, Now: ${now.toISOString()}, Active: ${hasActiveSub}`);
+
+                                                if (hasActiveSub) {
+                                                    const hoursLeft = Math.max(0, Math.round((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60)));
+                                                    return (
+                                                        <div className="flex flex-col">
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                                                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-1.5 animate-pulse"></span>
+                                                                24h Subscriber
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 mt-1">{hoursLeft}h left</span>
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    // Subscription expired - show as Pay as you go with expired note
+                                                    return (
+                                                        <div className="flex flex-col">
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5"></span>
+                                                                Pay as you go
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 mt-1">Sub expired</span>
+                                                        </div>
+                                                    );
+                                                }
+                                            })()}
+                                        </td>
                                         <td className="p-4">
                                             <div className="flex items-center gap-2">
                                                 <input type="number" defaultValue={u.balance || 0} className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 text-sm focus:ring-2 focus:ring-green-500" onBlur={(e) => updateBalance(u.id, e.target.value)} />
@@ -414,7 +477,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                 />
                                                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
                                             </div>
-                                            <p className="text-xs text-slate-500 mt-1">Default: ~2.00 USD (240 ETB)</p>
+                                            {/* <p className="text-xs text-slate-500 mt-1">Default: ~2.00 USD (240 ETB)</p> */}
                                         </div>
 
                                         {/* Output Cost */}
@@ -429,24 +492,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                 />
                                                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
                                             </div>
-                                            <p className="text-xs text-slate-500 mt-1">Default: ~12.00 USD (1440 ETB)</p>
+                                            {/* <p className="text-xs text-slate-500 mt-1">Default: ~12.00 USD (1440 ETB)</p> */}
                                         </div>
                                     </div>
 
                                     <div className="pt-4 border-t border-slate-200 mt-4">
-                                        <h3 className="text-sm font-bold text-slate-800 mb-3">Balance Requirements</h3>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-2">Minimum Balance to Search</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    value={minBalance}
-                                                    onChange={(e) => setMinBalance(e.target.value)}
-                                                    className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
-                                                />
-                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
+                                        <h3 className="text-sm font-bold text-slate-800 mb-3">Balance & Subscription</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">Minimum Balance to Search</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={minBalance}
+                                                        onChange={(e) => setMinBalance(e.target.value)}
+                                                        className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
+                                                    />
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Users must have at least this amount to start a search.</p>
                                             </div>
-                                            <p className="text-xs text-slate-500 mt-1">Users must have at least this amount to start a new search.</p>
+
+                                            {/* Subscription Price */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">24-Hour Pass Price</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={subPrice}
+                                                        onChange={(e) => setSubPrice(e.target.value)}
+                                                        className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
+                                                    />
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">ETB</span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Cost for 24 hours of unlimited usage.</p>
+                                            </div>
+
+                                            {/* Subscriber Daily Limit */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-2">Subscriber Daily Limit</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={dailyQuota}
+                                                        onChange={(e) => setDailyQuota(e.target.value)}
+                                                        className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-800 font-medium focus:ring-2 focus:ring-green-500"
+                                                        min="1"
+                                                    />
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">Q's</span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Max questions per day for 24h pass holders.</p>
+                                            </div>
                                         </div>
                                     </div>
 
