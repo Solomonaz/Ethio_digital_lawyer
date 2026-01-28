@@ -81,15 +81,35 @@ const App: React.FC = () => {
                 })
                   .then(r => r.json())
                   .then(userData => {
-                    setCurrentUser(prev => prev ? { ...prev, balance: userData.balance, subscription_expires_at: userData.subscription_expires_at } : null);
+                    setCurrentUser(prev => prev ? {
+                      ...prev,
+                      balance: userData.balance,
+                      subscription_expires_at: userData.subscription_expires_at,
+                      monthly_subscription_expires_at: userData.monthly_subscription_expires_at
+                    } : null);
 
-                    const isSubscription = userData.subscription_expires_at && new Date(userData.subscription_expires_at) > new Date();
-                    setSuccessModal({
-                      open: true,
-                      amount: userData.balance,
-                      message: isSubscription ? 'Unlimited access activated' : t('accountCredited'),
-                      subscriptionExpiresAt: isSubscription ? userData.subscription_expires_at : undefined
-                    });
+                    const is24hSubscription = userData.subscription_expires_at && new Date(userData.subscription_expires_at) > new Date();
+                    const isMonthlySubscription = userData.monthly_subscription_expires_at && new Date(userData.monthly_subscription_expires_at) > new Date();
+
+                    if (isMonthlySubscription) {
+                      setSuccessModal({
+                        open: true,
+                        message: 'Monthly Pass Activated!',
+                        subscriptionExpiresAt: userData.monthly_subscription_expires_at
+                      });
+                    } else if (is24hSubscription) {
+                      setSuccessModal({
+                        open: true,
+                        message: '24-Hour Pass Activated!',
+                        subscriptionExpiresAt: userData.subscription_expires_at
+                      });
+                    } else {
+                      setSuccessModal({
+                        open: true,
+                        amount: userData.balance,
+                        message: t('accountCredited')
+                      });
+                    }
                   });
               }
             })
@@ -184,9 +204,13 @@ const App: React.FC = () => {
   const sessionIsFree = totalUserMessages < 2;
 
   // Check if user has an active subscription (for UI rendering)
-  const hasActiveSubscription = currentUser?.subscription_expires_at
+  const has24hSubscription = currentUser?.subscription_expires_at
     ? new Date(currentUser.subscription_expires_at) > new Date()
     : false;
+  const hasMonthlySubscription = currentUser?.monthly_subscription_expires_at
+    ? new Date(currentUser.monthly_subscription_expires_at) > new Date()
+    : false;
+  const hasActiveSubscription = has24hSubscription || hasMonthlySubscription;
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -196,7 +220,7 @@ const App: React.FC = () => {
 
     // Check Minimum Balance (Client Side Pre-check)
     // BYPASS if user has an active subscription
-    const hasSubscription = currentUser.subscription_expires_at && new Date(currentUser.subscription_expires_at) > new Date();
+    const hasSubscription = hasActiveSubscription;
 
     if (!sessionIsFree && !hasSubscription && (currentUser.balance || 0) < minRequiredBalance) {
       setToast({

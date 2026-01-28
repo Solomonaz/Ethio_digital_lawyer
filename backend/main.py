@@ -11,7 +11,7 @@ import base64
 import re
 
 from database import engine, Base, get_db
-from models import User, Chat, ChatMessage, Payment, Setting, UsageLog
+from models import User, Chat, ChatMessage, Payment, Setting, UsageLog, PendingRegistration
 import uuid
 from schemas import (
     UserCreate, UserLogin, UserResponse, Token,
@@ -160,11 +160,36 @@ def get_subscription_daily_quota(db: Session) -> int:
         return int(setting.value)
     return 100  # Default: 100 questions per day
 
+# --- Helper: Get monthly subscription price from settings ---
+def get_monthly_subscription_price(db: Session) -> float:
+    setting = db.query(Setting).filter(Setting.key == "subscription_monthly_price").first()
+    if setting:
+        return float(setting.value)
+    return 500.0  # Default: 500 ETB
+
+# --- Helper: Get monthly subscription daily quota from settings ---
+def get_monthly_subscription_quota(db: Session) -> int:
+    setting = db.query(Setting).filter(Setting.key == "subscription_monthly_quota").first()
+    if setting:
+        return int(setting.value)
+    return 100  # Default: 100 questions per day
+
 # --- AUTH ENDPOINTS ---
 
-@app.post("/auth/register", response_model=Token)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
+import random
+from datetime import timedelta
+
+@app.post("/auth/register")
+@limiter.limit("5/minute")
+async def register_step1(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
+    """
+    Phase 1 of Two-Phase Registration:
+    - Validates input
+    - Checks for duplicates
+    - Stores pending registration with verification code
+    - Sends verification code
+    - Does NOT create the user yet
+    """
     import re
     
     # Validate email format
@@ -174,26 +199,28 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     
     # Validate phone number format (Ethiopian numbers - Ethiotelecom & Safaricom)
     phone = user_data.phone_number.strip()
-    if phone:
-        # Remove spaces, dashes, and parentheses
-        phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
-        
-        # Valid Ethiopian phone formats:
-        # +2519XXXXXXXX (Ethiotelecom) - 13 chars
-        # +2517XXXXXXXX (Safaricom) - 13 chars  
-        # 2519XXXXXXXX or 2517XXXXXXXX - 12 chars
-        # 09XXXXXXXX or 07XXXXXXXX - 10 chars
-        # 9XXXXXXXX or 7XXXXXXXX - 9 chars
-        if not re.match(r'^(\+251|251|0)?[79]\d{8}$', phone_clean):
-            raise HTTPException(
-                status_code=400, 
-                detail="Invalid phone number format. Use: +251 9XX XXX XXX (Ethiotelecom) or +251 7XX XXX XXX (Safaricom)"
-            )
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number is required for verification")
+    
+    # Remove spaces, dashes, and parentheses
+    phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
+    
+    # Valid Ethiopian phone formats:
+    # +2519XXXXXXXX (Ethiotelecom) - 13 chars
+    # +2517XXXXXXXX (Safaricom) - 13 chars  
+    # 2519XXXXXXXX or 2517XXXXXXXX - 12 chars
+    # 09XXXXXXXX or 07XXXXXXXX - 10 chars
+    # 9XXXXXXXX or 7XXXXXXXX - 9 chars
+    if not re.match(r'^(\+251|251|0)?[79]\d{8}$', phone_clean):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid phone number format. Use: +251 9XX XXX XXX (Ethiotelecom) or +251 7XX XXX XXX (Safaricom)"
+        )
     
     # Extract username from email (part before @)
     username = user_data.email.split('@')[0]
     
-    # Check if email already exists
+    # Check if email already exists in users
     existing_email = db.query(User).filter(User.email == user_data.email).first()
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -203,25 +230,131 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if existing_username:
         raise HTTPException(status_code=400, detail="Username already taken. Please use a different email.")
     
-    # Check if phone number already exists (if provided)
-    if phone:
-        existing_phone = db.query(User).filter(User.phone_number == phone).first()
-        if existing_phone:
-            raise HTTPException(status_code=400, detail="Phone number already registered")
+    # Check if phone number already exists
+    existing_phone = db.query(User).filter(User.phone_number == phone).first()
+    if existing_phone:
+        raise HTTPException(status_code=400, detail="Phone number already registered")
     
-    # Create new user
+    # Delete any existing pending registration with same email or phone
+    db.query(PendingRegistration).filter(
+        (PendingRegistration.email == user_data.email) | (PendingRegistration.phone_number == phone)
+    ).delete()
+    db.commit()
+    
+    # Generate 6-digit verification code
+    code = str(random.randint(100000, 999999))
+    expires_at = datetime.utcnow() + timedelta(minutes=10)  # 10 minutes validity
+    
+    # Hash the password
     hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        username=username,
+    
+    # Store pending registration
+    pending = PendingRegistration(
         name=user_data.name,
         email=user_data.email,
-        phone_number=user_data.phone_number,
+        phone_number=phone,
         password_hash=hashed_password,
-        auth_provider="local"
+        verification_code=code,
+        verification_code_expires=expires_at
+    )
+    db.add(pending)
+    db.commit()
+    
+    # Print code to console for development
+    print(f"\n{'='*50}")
+    print(f"📱 REGISTRATION VERIFICATION CODE for {phone}")
+    print(f"   Code: {code}")
+    print(f"   Email: {user_data.email}")
+    print(f"{'='*50}\n")
+    
+    # Try to send via Telegram if configured
+    telegram_token = os.getenv("TELEGRAM_GATEWAY_API_TOKEN")
+    dev_code = None
+    
+    if telegram_token:
+        from services.telegram_service import TelegramService
+        success = TelegramService.send_verification_code(phone, code)
+        if not success:
+            dev_code = code  # Fallback - show code in response
+    else:
+        dev_code = code  # Development mode - show code in response
+    
+    response_data = {
+        "message": "Verification code sent. Please verify to complete registration.",
+        "expires_in": 600,
+        "phone_number": phone
+    }
+    
+    if dev_code:
+        response_data["dev_code"] = dev_code
+    
+    return response_data
+
+
+@app.post("/auth/verify-registration", response_model=Token)
+@limiter.limit("10/minute")
+async def register_step2(request: Request, data: dict, db: Session = Depends(get_db)):
+    """
+    Phase 2 of Two-Phase Registration:
+    - Verifies the code
+    - Creates the user
+    - Returns access token
+    """
+    phone_number = data.get("phone_number", "").strip()
+    code = data.get("code", "").strip()
+    
+    if not phone_number or not code:
+        raise HTTPException(status_code=400, detail="Phone number and verification code are required")
+    
+    # Find pending registration
+    pending = db.query(PendingRegistration).filter(
+        PendingRegistration.phone_number == phone_number
+    ).first()
+    
+    if not pending:
+        raise HTTPException(status_code=400, detail="No pending registration found. Please start registration again.")
+    
+    # Check expiry
+    if datetime.utcnow() > pending.verification_code_expires:
+        # Delete expired pending registration
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please register again.")
+    
+    # Verify code
+    if pending.verification_code != code:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    # Extract username from email
+    username = pending.email.split('@')[0]
+    
+    # Double-check no user was created in the meantime
+    existing = db.query(User).filter(
+        (User.email == pending.email) | (User.username == username) | (User.phone_number == pending.phone_number)
+    ).first()
+    if existing:
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=400, detail="This account was already registered. Please login instead.")
+    
+    # Create the actual user now
+    new_user = User(
+        username=username,
+        name=pending.name,
+        email=pending.email,
+        phone_number=pending.phone_number,
+        password_hash=pending.password_hash,
+        auth_provider="local",
+        is_verified=True  # Already verified!
     )
     db.add(new_user)
+    
+    # Delete pending registration
+    db.delete(pending)
     db.commit()
     db.refresh(new_user)
+    
+    print(f"[REGISTRATION] User {new_user.username} created successfully after phone verification!")
     
     # Create access token
     access_token = create_access_token(data={"sub": new_user.username})
@@ -325,7 +458,8 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "balance": current_user.balance,
         "is_admin": current_user.is_admin,
         "is_verified": current_user.is_verified,
-        "subscription_expires_at": (current_user.subscription_expires_at.isoformat() + "Z") if current_user.subscription_expires_at else None
+        "subscription_expires_at": (current_user.subscription_expires_at.isoformat() + "Z") if current_user.subscription_expires_at else None,
+        "monthly_subscription_expires_at": (current_user.monthly_subscription_expires_at.isoformat() + "Z") if current_user.monthly_subscription_expires_at else None
     }
 
 # --- PHONE VERIFICATION ENDPOINTS ---
@@ -462,8 +596,8 @@ async def initialize_payment(
         tx_ref=tx_ref,
         return_url=f"http://localhost:5173/payment/callback?tx_ref={tx_ref}",
         customization={
-            "title": "EthioLex Pass" if request.payment_type == "subscription_24h" else "EthioLex Fund",
-            "description": "24-Hour Pass" if request.payment_type == "subscription_24h" else "Balance Recharge"
+            "title": "EthioLex 30-Day" if request.payment_type == "subscription_monthly" else ("EthioLex 24h" if request.payment_type == "subscription_24h" else "EthioLex Funds"),
+            "description": "Monthly Pass" if request.payment_type == "subscription_monthly" else ("Day Pass" if request.payment_type == "subscription_24h" else "Balance Recharge")
         }
     )
     
@@ -516,15 +650,23 @@ async def verify_payment(
             user = db.query(User).filter(User.id == payment.user_id).first()
             if user:
                 if payment.payment_type == "subscription_24h":
-                    # Extend subscription
-                    # If valid existing subscription, extend from that time, else from now
+                    # Extend 24h subscription
                     now = datetime.utcnow()
                     start_time = now
                     if user.subscription_expires_at and user.subscription_expires_at > now:
                         start_time = user.subscription_expires_at
                     
                     user.subscription_expires_at = start_time + timedelta(hours=24)
-                    print(f"[SUBSCRIPTION] Activated for user {user.username}, expires: {user.subscription_expires_at}")
+                    print(f"[SUBSCRIPTION] 24h activated for user {user.username}, expires: {user.subscription_expires_at}")
+                elif payment.payment_type == "subscription_monthly":
+                    # Extend monthly subscription (30 days)
+                    now = datetime.utcnow()
+                    start_time = now
+                    if user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now:
+                        start_time = user.monthly_subscription_expires_at
+                    
+                    user.monthly_subscription_expires_at = start_time + timedelta(days=30)
+                    print(f"[SUBSCRIPTION] Monthly activated for user {user.username}, expires: {user.monthly_subscription_expires_at}")
                 else:
                     user.balance += payment.amount
             
@@ -550,13 +692,21 @@ async def payment_callback(data: dict, db: Session = Depends(get_db)):
                 user = db.query(User).filter(User.id == payment.user_id).first()
                 if user:
                     if payment.payment_type == "subscription_24h":
-                         # Extend subscription
+                         # Extend 24h subscription
                         now = datetime.utcnow()
                         start_time = now
                         if user.subscription_expires_at and user.subscription_expires_at > now:
                             start_time = user.subscription_expires_at
                         
                         user.subscription_expires_at = start_time + timedelta(hours=24)
+                    elif payment.payment_type == "subscription_monthly":
+                         # Extend monthly subscription
+                        now = datetime.utcnow()
+                        start_time = now
+                        if user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now:
+                            start_time = user.monthly_subscription_expires_at
+                        
+                        user.monthly_subscription_expires_at = start_time + timedelta(days=30)
                     else:
                         user.balance += payment.amount
             elif status_msg == "failed":
@@ -672,13 +822,20 @@ async def send_message(
 
     # Free Search Logic (First 2 searches are free ONLY if balance is zero and no subscription)
     # If user has balance OR active subscription, they get full service
-    has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+    has_24h_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+    has_monthly_subscription = current_user.monthly_subscription_expires_at and current_user.monthly_subscription_expires_at > datetime.utcnow()
+    has_subscription = has_24h_subscription or has_monthly_subscription
     is_free_search = user_message_count < 2 and current_user.balance <= 0 and not has_subscription
     
     # --- SUBSCRIPTION DAILY QUOTA CHECK ---
     quota_info = None  # Will be set for subscribers
     if has_subscription:
-        daily_quota = get_subscription_daily_quota(db)
+        # Determine which quota to use based on subscription type
+        if has_monthly_subscription:
+            daily_quota = get_monthly_subscription_quota(db)
+        else:
+            daily_quota = get_subscription_daily_quota(db)
+        
         # Count messages sent TODAY by this subscriber (subscription-covered)
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         today_usage_count = db.query(UsageLog).filter(
@@ -694,7 +851,8 @@ async def send_message(
             "percentage": round((today_usage_count / daily_quota) * 100) if daily_quota > 0 else 0
         }
         
-        print(f"[QUOTA] User {current_user.username}: {today_usage_count}/{daily_quota} questions used today ({quota_info['percentage']}%)")
+        subscription_type = "monthly" if has_monthly_subscription else "24h"
+        print(f"[QUOTA] User {current_user.username} ({subscription_type}): {today_usage_count}/{daily_quota} questions used today ({quota_info['percentage']}%)")
         
         if today_usage_count >= daily_quota:
             raise HTTPException(
@@ -754,8 +912,9 @@ async def send_message(
         for msg in chat_history[:-1]:  # Exclude the message we just added
             # Clean context if user has balance or subscription
             msg_content = msg.content
-            has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
-            if current_user.balance > 0 or has_subscription:
+            has_24h_sub = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+            has_monthly_sub = current_user.monthly_subscription_expires_at and current_user.monthly_subscription_expires_at > datetime.utcnow()
+            if current_user.balance > 0 or has_24h_sub or has_monthly_sub:
                  msg_content = re.sub(r'\s*\*This is a limited free search\. Please recharge your account for a robust and complete response\.\*\s*', '', msg.content).strip()
             
             contents.append(types.Content(
@@ -954,7 +1113,8 @@ async def admin_get_users(
             "is_admin": u.is_admin,
             "is_active": u.is_active if u.is_active is not None else True,
             "created_at": u.created_at.isoformat() if u.created_at else None,
-            "subscription_expires_at": (u.subscription_expires_at.isoformat() + "Z") if u.subscription_expires_at else None
+            "subscription_expires_at": (u.subscription_expires_at.isoformat() + "Z") if u.subscription_expires_at else None,
+            "monthly_subscription_expires_at": (u.monthly_subscription_expires_at.isoformat() + "Z") if u.monthly_subscription_expires_at else None
         })
         
     return user_list
@@ -1053,13 +1213,21 @@ async def admin_approve_payment(
     user = db.query(User).filter(User.id == payment.user_id).first()
     if user:
         if payment.payment_type == "subscription_24h":
-            # Activate subscription - same logic as verify_payment
+            # Activate 24h subscription - same logic as verify_payment
             now = datetime.utcnow()
             start_time = now
             if user.subscription_expires_at and user.subscription_expires_at > now:
                 start_time = user.subscription_expires_at
             user.subscription_expires_at = start_time + timedelta(hours=24)
-            print(f"[ADMIN APPROVAL] Subscription activated for user {user.username}, expires: {user.subscription_expires_at}")
+            print(f"[ADMIN APPROVAL] 24h Subscription activated for user {user.username}, expires: {user.subscription_expires_at}")
+        elif payment.payment_type == "subscription_monthly":
+            # Activate monthly subscription
+            now = datetime.utcnow()
+            start_time = now
+            if user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now:
+                start_time = user.monthly_subscription_expires_at
+            user.monthly_subscription_expires_at = start_time + timedelta(days=30)
+            print(f"[ADMIN APPROVAL] Monthly Subscription activated for user {user.username}, expires: {user.monthly_subscription_expires_at}")
         else:
             # Regular recharge - add to balance
             user.balance += payment.amount
@@ -1068,7 +1236,8 @@ async def admin_approve_payment(
     return {
         "message": "Payment approved", 
         "new_balance": user.balance if user else None,
-        "subscription_expires_at": (user.subscription_expires_at.isoformat() + "Z") if user and user.subscription_expires_at else None
+        "subscription_expires_at": (user.subscription_expires_at.isoformat() + "Z") if user and user.subscription_expires_at else None,
+        "monthly_subscription_expires_at": (user.monthly_subscription_expires_at.isoformat() + "Z") if user and user.monthly_subscription_expires_at else None
     }
 
 @app.put("/admin/payments/{payment_id}/reject")
@@ -1133,7 +1302,7 @@ async def admin_update_setting(
 async def get_public_settings(db: Session = Depends(get_db)):
     """Get public settings (Unauthenticated)"""
     # Define which keys are safe to expose
-    public_keys = ["subscription_24h_price", "min_search_balance", "search_cost"]
+    public_keys = ["subscription_24h_price", "min_search_balance", "search_cost", "subscription_daily_quota", "subscription_monthly_price", "subscription_monthly_quota"]
     
     settings = db.query(Setting).filter(Setting.key.in_(public_keys)).all()
     

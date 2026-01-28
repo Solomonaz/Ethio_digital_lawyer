@@ -25,6 +25,7 @@ class User(Base):
     
     # Subscription Fields
     subscription_expires_at = Column(DateTime, nullable=True) # Expiry time for 24h subscription
+    monthly_subscription_expires_at = Column(DateTime, nullable=True) # Expiry time for monthly subscription
 
     # Relationships
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
@@ -94,3 +95,17 @@ class UsageLog(Base):
     model = Column(String, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     is_subscription_covered = Column(Boolean, default=False)
+
+
+class PendingRegistration(Base):
+    """Temporary storage for registration data until phone verification is complete"""
+    __tablename__ = "pending_registrations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    phone_number = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)
+    verification_code = Column(String, nullable=False)
+    verification_code_expires = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
