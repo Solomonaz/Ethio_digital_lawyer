@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { APP_NAME } from '../constants';
 import { ChatSession, User } from '../types';
@@ -31,6 +31,25 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAddFunds
 }) => {
   const { t } = useTranslation();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   // Helper to check if a session has real user messages (not just welcome/model messages)
   const hasRealContent = (session: ChatSession) => {
@@ -78,6 +97,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const sessionGroups = groupSessions();
 
+  // Tooltip component for collapsed state
+  const Tooltip: React.FC<{ children: React.ReactNode; label: string }> = ({ children, label }) => (
+    <div className="group/tooltip relative">
+      {children}
+      {!isOpen && (
+        <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-xs font-medium rounded-lg shadow-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 whitespace-nowrap z-50 border border-slate-700/50">
+          {label}
+          <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800"></div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -91,54 +123,61 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Container */}
       <div className={`fixed inset-y-0 left-0 z-30 flex flex-col transform transition-all duration-300 ease-out 
         md:static md:inset-auto md:transform-none
-        ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 md:translate-x-0 md:w-20'}
+        ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 md:translate-x-0 md:w-[72px]'}
       `}>
 
         {/* Main Sidebar Content */}
-        <div className={`flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 md:w-20'}`}>
+        <div className={`flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 md:w-[72px]'}`}>
 
           {/* Header */}
-          <div className={`relative p-5 border-b border-slate-800/50 flex items-center ${isOpen ? 'justify-between' : 'justify-center flex-col gap-4'}`}>
+          <div className={`relative border-b border-slate-800/50 ${isOpen ? 'p-5' : 'p-3'}`}>
             <div className="absolute top-0 left-0 right-0 h-1 eth-flag-stripe"></div>
 
-            <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center'}`}>
-              <div className="relative">
-                <div className="w-14 h-14 rounded-xl flex items-center justify-center">
-                  <img src="/favicon.svg" alt="EthioLex Logo" className="w-10 h-10 object-contain" />
+            <div className={`flex items-center ${isOpen ? 'justify-between' : 'flex-col gap-3'}`}>
+              {/* Logo */}
+              <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center pt-2'}`}>
+                <div className="relative group cursor-pointer" onClick={!isOpen ? toggleSidebar : undefined}>
+                  <div className={`${isOpen ? 'w-12 h-12' : 'w-11 h-11'} rounded-xl flex items-center justify-center bg-gradient-to-br from-slate-800/50 to-slate-800/30 border border-slate-700/30 transition-all group-hover:border-emerald-500/30`}>
+                    <img src="/favicon.svg" alt="EthioLex Logo" className={`${isOpen ? 'w-8 h-8' : 'w-7 h-7'} object-contain`} />
+                  </div>
                 </div>
+                {isOpen && (
+                  <div className="animate-fade-in">
+                    <h1 className="text-lg font-bold text-white tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+                      {APP_NAME}
+                    </h1>
+                    <p className="text-[10px] text-emerald-400 font-medium uppercase tracking-widest">Digital Lawyer</p>
+                  </div>
+                )}
               </div>
-              {isOpen && (
-                <div className="animate-fade-in">
-                  <h1 className="text-lg font-bold text-white tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
-                    {APP_NAME}
-                  </h1>
-                  <p className="text-[10px] text-emerald-400 font-medium uppercase tracking-widest">Digital Lawyer</p>
-                </div>
-              )}
-            </div>
 
-            {/* Toggle Button */}
-            <button
-              onClick={toggleSidebar}
-              className={`p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all ${!isOpen && 'mt-2'}`}
-              title={t('toggleSidebar')}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
+              {/* Toggle Button */}
+              <Tooltip label={isOpen ? t('collapseSidebar') || 'Collapse' : t('expandSidebar') || 'Expand'}>
+                <button
+                  onClick={toggleSidebar}
+                  className={`p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all border border-transparent hover:border-slate-700/50 ${!isOpen && 'mt-1'}`}
+                >
+                  <svg className={`w-5 h-5 transition-transform duration-300 ${!isOpen && 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {isOpen ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    )}
+                  </svg>
+                </button>
+              </Tooltip>
+            </div>
           </div>
 
-          {/* New Chat Button - Only show when there are previous histories */}
-          {sessionGroups.length > 0 && (
-            <div className={`px-4 py-4 ${!isOpen && 'flex justify-center'}`}>
+          {/* New Chat Button */}
+          <div className={`${isOpen ? 'px-4 py-4' : 'px-3 py-3 flex justify-center'}`}>
+            <Tooltip label={t('newChat')}>
               <button
                 onClick={() => {
                   onNewChat();
                   if (window.innerWidth < 768) toggleSidebar();
                 }}
-                className={`group relative overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl font-medium text-sm flex items-center justify-center transition-all duration-300 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5 ${isOpen ? 'w-full py-3.5 px-4 gap-2' : 'w-12 h-12 p-0'}`}
-                title={t('newChat')}
+                className={`group relative overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-medium text-sm flex items-center justify-center transition-all duration-300 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5 ${isOpen ? 'w-full py-3.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -146,137 +185,231 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </svg>
                 {isOpen && <span>{t('newChat')}</span>}
               </button>
+            </Tooltip>
+          </div>
+
+          {/* Divider for collapsed state */}
+          {!isOpen && sessionGroups.length > 0 && (
+            <div className="px-3 py-1">
+              <div className="h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent"></div>
             </div>
           )}
 
-          {/* Chat History */}
-          <div className={`flex-1 overflow-y-auto px-3 pb-4 custom-scrollbar ${!isOpen ? 'hidden' : ''}`}>
-            {sessionGroups.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
+          {/* Chat History - Collapsed shows icons */}
+          {!isOpen ? (
+            <div className="flex-1 overflow-hidden py-2 flex flex-col items-center gap-1.5">
+              {sessionGroups.flatMap(g => g.items).slice(0, 5).map((session) => (
+                <Tooltip key={session.id} label={session.title}>
+                  <button
+                    onClick={() => {
+                      onSelectSession(session);
+                      if (window.innerWidth < 768) toggleSidebar();
+                    }}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0 ${currentSessionId === session.id
+                      ? 'bg-slate-800 border-l-2 border-l-emerald-500 border-y border-r border-y-slate-700/50 border-r-slate-700/50 text-emerald-400'
+                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white border border-transparent hover:border-slate-700/50'
+                      }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                  </button>
+                </Tooltip>
+              ))}
+              {sessionGroups.flatMap(g => g.items).length > 5 && (
+                <Tooltip label={`${sessionGroups.flatMap(g => g.items).length - 5} more chats`}>
+                  <button
+                    onClick={toggleSidebar}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-all border border-dashed border-slate-700/50 hover:border-slate-600 shrink-0"
+                  >
+                    <span className="text-[10px] font-semibold">+{sessionGroups.flatMap(g => g.items).length - 5}</span>
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto px-3 pb-4 custom-scrollbar">
+              {sessionGroups.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-500 text-sm">{t('noHistory')}</p>
+                  <p className="text-slate-600 text-xs mt-1">Start a new consultation above</p>
                 </div>
-                <p className="text-slate-500 text-sm">{t('noHistory')}</p>
-                <p className="text-slate-600 text-xs mt-1">Start a new consultation above</p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {sessionGroups.map((group, gIndex) => (
-                  <div key={gIndex} className="animate-fade-in" style={{ animationDelay: `${gIndex * 50}ms` }}>
-                    <h3 className="px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
-                      {group.label}
-                    </h3>
-                    <div className="space-y-1">
-                      {group.items.map((session) => (
-                        <div
-                          key={session.id}
-                          className={`group relative flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200 ${currentSessionId === session.id
-                            ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 border border-emerald-500/20 text-white'
-                            : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                            }`}
-                          onClick={() => {
-                            onSelectSession(session);
-                            if (window.innerWidth < 768) toggleSidebar();
-                          }}
-                        >
-                          {currentSessionId === session.id && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-emerald-500 rounded-r-full"></div>
-                          )}
-
-                          <svg className="w-4 h-4 mr-3 flex-shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                          </svg>
-
-                          <span className="flex-1 truncate text-sm">{session.title}</span>
-
-                          <button
-                            onClick={(e) => onDeleteSession(session.id, e)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              ) : (
+                <div className="space-y-5">
+                  {sessionGroups.map((group, gIndex) => (
+                    <div key={gIndex} className="animate-fade-in" style={{ animationDelay: `${gIndex * 50}ms` }}>
+                      <h3 className="px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                        <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
+                        {group.label}
+                      </h3>
+                      <div className="space-y-1">
+                        {group.items.map((session) => (
+                          <div
+                            key={session.id}
+                            className={`group relative flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200 ${currentSessionId === session.id
+                              ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 border border-emerald-500/20 text-white'
+                              : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                              }`}
+                            onClick={() => {
+                              onSelectSession(session);
+                              if (window.innerWidth < 768) toggleSidebar();
+                            }}
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                            {currentSessionId === session.id && (
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-emerald-500 rounded-r-full"></div>
+                            )}
 
-          {/* User Footer - Cleaner design with Settings button */}
-          <div className="p-4 border-t border-slate-800/50 bg-gradient-to-t from-slate-950 to-transparent">
-            {user && (
-              <div className={`flex items-center ${isOpen ? 'justify-between' : 'flex-col gap-4'}`}>
-                {/* User Profile */}
-                <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center'}`}>
-                  <div className="relative cursor-pointer" onClick={onOpenSettings} title={user.username}>
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm">
-                      {user.username?.charAt(0).toUpperCase()}
+                            <svg className="w-4 h-4 mr-3 flex-shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+
+                            <span className="flex-1 truncate text-sm">{session.title}</span>
+
+                            <button
+                              onClick={(e) => onDeleteSession(session.id, e)}
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
-                  </div>
-                  {isOpen && (
-                    <div className="animate-fade-in">
-                      <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.username}</p>
-                      <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
-                        {user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() ? (
-                          (() => {
-                            const diff = new Date(user.subscription_expires_at).getTime() - new Date().getTime();
-                            const hrs = Math.floor(diff / (1000 * 60 * 60));
-                            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                            return `Pro: ${hrs}h ${mins}m left`;
-                          })()
-                        ) : (
-                          `${user.balance?.toLocaleString() || '0'} ETB`
-                        )}
-                      </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* User Footer */}
+          <div className={`border-t border-slate-800/50 bg-gradient-to-t from-slate-950 to-transparent ${isOpen ? 'p-4' : 'p-3'}`}>
+            {user && (
+              <div className={`flex ${isOpen ? 'items-center justify-between' : 'flex-col items-center gap-2'}`}>
+                {/* User Profile with Popup Menu */}
+                <div className="relative" ref={profileMenuRef}>
+                  {isOpen ? (
+                    <div
+                      className="flex items-center gap-3 cursor-pointer group"
+                      onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    >
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm group-hover:from-slate-600 group-hover:to-slate-500 transition-all">
+                          {user.username?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
+                      </div>
+                      <div className="animate-fade-in">
+                        <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.username}</p>
+                        <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date()
+                            ? 'bg-purple-500'
+                            : user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date()
+                              ? 'bg-indigo-500'
+                              : 'bg-emerald-500'
+                            }`}></span>
+                          {user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date() ? (
+                            (() => {
+                              const diff = new Date(user.monthly_subscription_expires_at).getTime() - new Date().getTime();
+                              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                              const hrs = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                              return `Monthly: ${days}d ${hrs}h left`;
+                            })()
+                          ) : user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() ? (
+                            (() => {
+                              const diff = new Date(user.subscription_expires_at).getTime() - new Date().getTime();
+                              const hrs = Math.floor(diff / (1000 * 60 * 60));
+                              const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                              return `Pro: ${hrs}h ${mins}m left`;
+                            })()
+                          ) : (
+                            `${user.balance?.toLocaleString() || '0'} ETB`
+                          )}
+                        </p>
+                      </div>
+                      {/* Dropdown indicator */}
+                      <svg className={`w-4 h-4 text-slate-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <Tooltip label={user.username || 'Profile'}>
+                      <button
+                        onClick={() => setShowProfileMenu(!showProfileMenu)}
+                        className="relative"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm hover:from-slate-600 hover:to-slate-500 transition-all border border-slate-600/50">
+                          {user.username?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
+                      </button>
+                    </Tooltip>
+                  )}
+
+                  {/* Profile Popup Menu */}
+                  {showProfileMenu && (
+                    <div className={`absolute ${isOpen ? 'bottom-full left-0 mb-2 w-48' : 'left-full bottom-0 ml-2 w-44'} bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 py-1.5 z-50 animate-fade-in`}>
+                      {/* Arrow pointer */}
+                      <div className={`absolute ${isOpen ? 'bottom-0 left-4 translate-y-full border-t-slate-800' : 'left-0 bottom-3 -translate-x-full border-r-slate-800'} border-8 border-transparent ${isOpen ? 'border-t-slate-800' : 'border-r-slate-800'}`}></div>
+
+                      {/* User info header in popup */}
+                      <div className="px-3 py-2 border-b border-slate-700/50 mb-1">
+                        <p className="text-sm font-medium text-white truncate">{user.username}</p>
+                        <p className="text-xs text-slate-400 truncate">{user.email || 'User'}</p>
+                      </div>
+
+                      {/* Settings Option */}
+                      <button
+                        onClick={() => {
+                          onOpenSettings();
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        {t('settings') || 'Settings'}
+                      </button>
+
+                      {/* Divider */}
+                      <div className="my-1 border-t border-slate-700/50"></div>
+
+                      {/* Logout Option */}
+                      <button
+                        onClick={() => {
+                          onLogout();
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        {t('logout') || 'Logout'}
+                      </button>
                     </div>
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className={`flex items-center gap-1 ${!isOpen && 'flex-col'}`}>
-                  {/* Add Funds Button */}
+                {/* Add Funds Button Only */}
+                <Tooltip label={t('addFunds') || 'Add Funds'}>
                   <button
                     onClick={onAddFunds}
-                    className="p-2.5 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all"
-                    title="Add Funds"
+                    className={`rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all border border-transparent hover:border-amber-500/20 ${isOpen ? 'p-2.5' : 'p-2 w-10 h-10 flex items-center justify-center mt-2'}`}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </button>
-
-                  {/* Settings Button */}
-                  <button
-                    onClick={onOpenSettings}
-                    className="p-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
-                    title={t('settings')}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-
-                  {/* Logout Button */}
-                  <button
-                    onClick={onLogout}
-                    className="p-2.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                    title={t('logout')}
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                  </button>
-                </div>
+                </Tooltip>
               </div>
             )}
           </div>
@@ -287,3 +420,4 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
+

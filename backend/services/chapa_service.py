@@ -37,21 +37,30 @@ class ChapaService:
         print(f"[CHAPA DEBUG] Payload: {payload}")
 
         try:
-            response = requests.post(f"{CHAPA_API_URL}/transaction/initialize", json=payload, headers=headers)
+            response = requests.post(f"{CHAPA_API_URL}/transaction/initialize", json=payload, headers=headers, timeout=30)
             try:
                 # Try to parse error details if any
                 if not response.ok:
                     print(f"[CHAPA ERROR BODY] {response.text}")
+                    return {"status": "error", "message": response.text}
             except:
                 pass
                 
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.Timeout as e:
+            print(f"Chapa Payment Timeout: {e}")
+            return {"status": "error", "message": "Connection to Chapa timed out. Please try again."}
+        except requests.exceptions.ConnectionError as e:
+            print(f"Chapa Connection Error: {e}")
+            return {"status": "error", "message": "Could not connect to Chapa. Please check your internet connection."}
         except requests.exceptions.RequestException as e:
             print(f"Chapa Payment Error: {e}")
+            error_msg = str(e)
             if e.response:
                 print(f"Response: {e.response.text}")
-            return None
+                error_msg = e.response.text
+            return {"status": "error", "message": error_msg}
 
     @staticmethod
     def verify_payment(tx_ref: str):

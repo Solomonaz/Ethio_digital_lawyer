@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // --- AUTH ---
 
-export const registerUser = async (name: string, email: string, phoneNumber: string, password: string): Promise<User> => {
+export const registerUser = async (name: string, email: string, phoneNumber: string, password: string): Promise<{ message: string; expires_in: number; phone_number: string; dev_code?: string }> => {
     try {
         const res = await fetch(`${API_URL}/auth/register`, {
             method: 'POST',
@@ -26,17 +26,42 @@ export const registerUser = async (name: string, email: string, phoneNumber: str
             throw new Error(errorData.detail || 'Registration failed');
         }
 
-        const data = await res.json();
-        localStorage.setItem('token', data.access_token);
-        return {
-            id: data.user_id.toString(),
-            username: data.username,
-            createdAt: new Date(),
-            authProvider: 'local',
-            balance: 0
-        };
+        // Phase 1 returns verification info, NOT the user
+        return await res.json();
     } catch (error: any) {
         console.error('Registration error:', error);
+        throw error;
+    }
+};
+
+export const completeRegistration = async (phoneNumber: string, code: string): Promise<{ success: true; message: string }> => {
+    try {
+        const res = await fetch(`${API_URL}/auth/verify-registration`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone_number: phoneNumber, code })
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error('Verification error response:', errorText);
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch {
+                throw new Error('Verification failed: ' + errorText);
+            }
+            throw new Error(errorData.detail || 'Verification failed');
+        }
+
+        // Don't save token - user needs to login manually
+        // Just return success indicator
+        return {
+            success: true,
+            message: 'Registration completed successfully. Please login.'
+        };
+    } catch (error: any) {
+        console.error('Complete registration error:', error);
         throw error;
     }
 };
@@ -152,7 +177,8 @@ export const observeAuthState = (callback: (user: User | null) => void) => {
                     balance: userData.balance || 0,
                     is_admin: userData.is_admin || false,
                     is_verified: userData.is_verified || false,
-                    subscription_expires_at: userData.subscription_expires_at || undefined
+                    subscription_expires_at: userData.subscription_expires_at || undefined,
+                    monthly_subscription_expires_at: userData.monthly_subscription_expires_at || undefined
                 });
             })
             .catch(error => {

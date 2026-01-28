@@ -42,6 +42,7 @@ export interface User {
   is_verified?: boolean;
   needs_phone_number?: boolean;
   subscription_expires_at?: string;
+  monthly_subscription_expires_at?: string;
 }
 
 export interface ChatSession {

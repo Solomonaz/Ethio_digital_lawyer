@@ -104,7 +104,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     </div>
                                     <div className="flex-1">
                                         <h3 className="text-lg font-semibold text-slate-900">{user.username}</h3>
-                                        <p className="text-sm text-slate-500">{user.email || 'No email set'}</p>
+                                        <p className="text-sm text-slate-500">{user.email || t('noEmailSet')}</p>
                                         <div className="flex items-center gap-2 mt-2">
                                             <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
                                                 {user.authProvider === 'google' ? t('googleAccount') : t('emailAccount')}
@@ -168,48 +168,69 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {/* Billing Tab */}
                     {activeTab === 'billing' && user && (
                         <div className="space-y-6">
-                            {/* Balance Card */}
-                            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl shadow-emerald-500/25">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-sm font-medium text-emerald-100 uppercase tracking-wider">{t('balance')}</span>
-                                    <div className="w-3 h-3 rounded-full bg-white/30 animate-pulse"></div>
-                                </div>
-                                <div className="flex items-baseline gap-2 mb-6">
-                                    <span className="text-4xl font-bold">{user.balance?.toLocaleString() || '0'}</span>
-                                    <span className="text-lg text-emerald-100">ETB</span>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        onAddFunds();
-                                        onClose();
-                                    }}
-                                    className="w-full py-3 px-4 rounded-xl bg-white text-emerald-600 font-semibold hover:bg-emerald-50 transition-all shadow-lg"
-                                >
-                                    + {t('addFunds')}
-                                </button>
-                            </div>
-
-                            {/* Subscription Status */}
-                            {user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() && (
-                                <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-500/25 animate-scale-in">
+                            {/* Balance Card - Only show for pay-as-you-go users */}
+                            {!(user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date()) && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl shadow-emerald-500/25">
                                     <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm font-medium text-indigo-100 uppercase tracking-wider">Active Pass</span>
-                                        <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">24H Unlimited</span>
+                                        <span className="text-sm font-medium text-emerald-100 uppercase tracking-wider">{t('balance')}</span>
+                                        <div className="w-3 h-3 rounded-full bg-white/30 animate-pulse"></div>
+                                    </div>
+                                    <div className="flex items-baseline gap-2 mb-6">
+                                        <span className="text-4xl font-bold">{Math.max(0, user.balance || 0).toLocaleString()}</span>
+                                        <span className="text-lg text-emerald-100">ETB</span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            onAddFunds();
+                                            onClose();
+                                        }}
+                                        className="w-full py-3 px-4 rounded-xl bg-white text-emerald-600 font-semibold hover:bg-emerald-50 transition-all shadow-lg"
+                                    >
+                                        + {t('addFunds')}
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* 24h Subscription Status */}
+                            {user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-xl shadow-indigo-500/25 animate-scale-in">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-sm font-medium text-indigo-100 uppercase tracking-wider">{t('activePass')}</span>
+                                        <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">{t('unlimited24h')}</span>
                                     </div>
                                     <div className="mb-2">
-                                        <p className="text-indigo-100 text-sm">Expires on</p>
+                                        <p className="text-indigo-100 text-sm">{t('expiresOn')}</p>
                                         <p className="text-xl font-bold">
                                             {new Date(user.subscription_expires_at).toLocaleString()}
                                         </p>
                                     </div>
                                     <div className="text-sm text-indigo-100/80 italic">
-                                        * You have unlimited searches until expiry.
+                                        * {t('unlimitedSearchesNote')}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Monthly Subscription Status */}
+                            {user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date() && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-xl shadow-purple-500/25 animate-scale-in">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-sm font-medium text-purple-100 uppercase tracking-wider">{t('activePass')}</span>
+                                        <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">{t('unlimitedMonthly')}</span>
+                                    </div>
+                                    <div className="mb-2">
+                                        <p className="text-purple-100 text-sm">{t('expiresOn')}</p>
+                                        <p className="text-xl font-bold">
+                                            {new Date(user.monthly_subscription_expires_at).toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <div className="text-sm text-purple-100/80 italic">
+                                        * {t('unlimitedSearchesNote')}
                                     </div>
                                 </div>
                             )}
 
                             {/* Pricing Info */}
-                            <div className="space-y-4">
+                            {/* <div className="space-y-4">
                                 <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pricingss')}</h4>
                                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
                                     <div className="flex items-start gap-3">
@@ -224,7 +245,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </div> */}
                         </div>
                     )}
 
