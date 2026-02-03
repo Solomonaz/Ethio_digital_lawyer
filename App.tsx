@@ -33,12 +33,12 @@ const App: React.FC = () => {
   const [successModal, setSuccessModal] = useState<{ open: boolean; amount?: number; message?: string; subscriptionExpiresAt?: string }>({ open: false });
   // const [searchCost, setSearchCost] = useState(30); // REMOVED: Legacy fixed cost
   const [minRequiredBalance, setMinRequiredBalance] = useState(10.0);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [quotaExhaustedModal, setQuotaExhaustedModal] = useState<{ open: boolean; total: number }>({ open: false, total: 0 });
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; persistent?: boolean } | null>(null);
+  const [quotaExhaustedModal, setQuotaExhaustedModal] = useState<{ open: boolean; total: number; resetHours: number }>({ open: false, total: 0, resetHours: 24 });
   const [shownHalfQuotaWarning, setShownHalfQuotaWarning] = useState(false); // Track if 50% warning shown today
 
   useEffect(() => {
-    if (toast) {
+    if (toast && !toast.persistent) {
       const timer = setTimeout(() => setToast(null), 3000);
       return () => clearTimeout(timer);
     }
@@ -280,7 +280,8 @@ const App: React.FC = () => {
       if (botResponse.quotaInfo && botResponse.quotaInfo.percentage >= 50 && botResponse.quotaInfo.percentage < 100 && !shownHalfQuotaWarning) {
         setToast({
           message: t('quotaHalfUsed', { used: botResponse.quotaInfo.used, total: botResponse.quotaInfo.total }),
-          type: 'info'
+          type: 'info',
+          persistent: true
         });
         setShownHalfQuotaWarning(true);
       }
@@ -290,12 +291,14 @@ const App: React.FC = () => {
       if (error.status === 429 || (error.message && error.message.includes('daily_limit_reached'))) {
         // Parse the detail object if available
         let total = 100; // Default
+        let resetHours = 24; // Default
         try {
           if (error.detail && typeof error.detail === 'object') {
             total = error.detail.total || 100;
+            resetHours = error.detail.reset_hours || 24;
           }
         } catch { }
-        setQuotaExhaustedModal({ open: true, total });
+        setQuotaExhaustedModal({ open: true, total, resetHours });
         return; // Don't show error message
       }
 
@@ -452,7 +455,7 @@ const App: React.FC = () => {
     <div className="flex h-screen overflow-hidden font-sans relative">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-6 left-1/2 transform z-[100] px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce-in ${toast.type === 'success'
+        <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce-in ${toast.type === 'success'
           ? 'bg-gradient-to-r from-emerald-600 to-emerald-500'
           : toast.type === 'error'
             ? 'bg-gradient-to-r from-red-600 to-red-500'
@@ -472,6 +475,14 @@ const App: React.FC = () => {
             </div>
           )}
           <span className="font-medium text-sm">{toast.message}</span>
+          {toast.persistent && (
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
         </div>
       )}
 
@@ -489,14 +500,15 @@ const App: React.FC = () => {
           />
           <QuotaExhaustedModal
             isOpen={quotaExhaustedModal.open}
-            onClose={() => setQuotaExhaustedModal({ open: false, total: 0 })}
+            onClose={() => setQuotaExhaustedModal({ open: false, total: 0, resetHours: 24 })}
             total={quotaExhaustedModal.total}
+            resetHours={quotaExhaustedModal.resetHours}
             onSubscribe={() => {
-              setQuotaExhaustedModal({ open: false, total: 0 });
+              setQuotaExhaustedModal({ open: false, total: 0, resetHours: 24 });
               setIsPaymentModalOpen(true);
             }}
             onPayAsYouGo={() => {
-              setQuotaExhaustedModal({ open: false, total: 0 });
+              setQuotaExhaustedModal({ open: false, total: 0, resetHours: 24 });
               setIsPaymentModalOpen(true);
             }}
           />
@@ -570,6 +582,8 @@ const App: React.FC = () => {
             isOpen={isPaymentModalOpen}
             onClose={() => setIsPaymentModalOpen(false)}
             userEmail={currentUser?.email || currentUser?.username + '@ethiolex.com'}
+            has24hSubscription={has24hSubscription}
+            hasMonthlySubscription={hasMonthlySubscription}
           />
 
           {/* Main Content Area */}

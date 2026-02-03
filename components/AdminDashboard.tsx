@@ -52,6 +52,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const [dailyQuota, setDailyQuota] = useState('100'); // Default 24h subscriber daily limit
     const [monthlyPrice, setMonthlyPrice] = useState('500'); // Default monthly subscription price
     const [monthlyQuota, setMonthlyQuota] = useState('100'); // Default monthly subscriber daily limit
+    const [quotaResetHours, setQuotaResetHours] = useState('24'); // Quota reset interval in hours
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -147,6 +148,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
             const monthlyQuotaSetting = data.find((s: AdminSetting) => s.key === 'subscription_monthly_quota');
             if (monthlyQuotaSetting) setMonthlyQuota(monthlyQuotaSetting.value);
+
+            const quotaResetHoursSetting = data.find((s: AdminSetting) => s.key === 'quota_reset_hours');
+            if (quotaResetHoursSetting) setQuotaResetHours(quotaResetHoursSetting.value);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -241,6 +245,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             // 8. Monthly Subscriber Daily Quota
             await fetch(`http://127.0.0.1:8000/admin/settings/subscription_monthly_quota`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: monthlyQuota, description: 'Maximum questions per day for monthly subscribers' })
+            });
+            // 9. Quota Reset Hours
+            await fetch(`http://127.0.0.1:8000/admin/settings/quota_reset_hours`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: quotaResetHours, description: 'How often the question limit resets (in hours)' })
             });
 
             setSuccess('Pricing settings saved successfully!');
@@ -744,7 +752,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <label className="block text-xs font-medium text-indigo-600/70 mb-1">Daily Limit</label>
+                                                        <label className="block text-xs font-medium text-indigo-600/70 mb-1">Questions per {quotaResetHours}h</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="number"
@@ -780,7 +788,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <label className="block text-xs font-medium text-purple-600/70 mb-1">Daily Limit</label>
+                                                        <label className="block text-xs font-medium text-purple-600/70 mb-1">Questions per {quotaResetHours}h</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="number"
@@ -793,6 +801,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="border-t border-slate-100"></div>
+
+                                    {/* Quota Reset Configuration */}
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <span className="text-lg">🔄</span>
+                                            <h3 className="font-semibold text-slate-800">Limit Reset Configuration</h3>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center">
+                                                    <span className="text-white text-xs">⏱</span>
+                                                </div>
+                                                <span className="font-semibold text-amber-900 text-sm">Reset Interval</span>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-amber-600/70 mb-1">Limit resets every</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={quotaResetHours}
+                                                        onChange={(e) => setQuotaResetHours(e.target.value)}
+                                                        className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2 pr-16 text-amber-900 text-sm font-semibold focus:ring-2 focus:ring-amber-500 transition-all"
+                                                        min="1"
+                                                        max="168"
+                                                    />
+                                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-amber-400">hours</span>
+                                                </div>
+                                                <p className="text-[10px] text-amber-600/60 mt-1.5">e.g., 3 = every 3 hours, 24 = daily reset</p>
                                             </div>
                                         </div>
                                     </div>
