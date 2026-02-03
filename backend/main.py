@@ -174,6 +174,13 @@ def get_monthly_subscription_quota(db: Session) -> int:
         return int(setting.value)
     return 100  # Default: 100 questions per day
 
+# --- Helper: Get quota reset interval in hours from settings ---
+def get_quota_reset_hours(db: Session) -> int:
+    setting = db.query(Setting).filter(Setting.key == "quota_reset_hours").first()
+    if setting:
+        return int(setting.value)
+    return 24  # Default: 24 hours (daily reset)
+
 # --- AUTH ENDPOINTS ---
 
 import random
@@ -836,12 +843,13 @@ async def send_message(
         else:
             daily_quota = get_subscription_daily_quota(db)
         
-        # Count messages sent TODAY by this subscriber (subscription-covered)
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Count messages in the quota reset window (configurable rolling window)
+        quota_reset_hours = get_quota_reset_hours(db)
+        window_start = datetime.utcnow() - timedelta(hours=quota_reset_hours)
         today_usage_count = db.query(UsageLog).filter(
             UsageLog.user_id == current_user.id,
             UsageLog.is_subscription_covered == True,
-            UsageLog.timestamp >= today_start
+            UsageLog.timestamp >= window_start
         ).count()
         
         # Store quota info for response
@@ -860,7 +868,8 @@ async def send_message(
                 detail={
                     "message": "daily_limit_reached",
                     "used": today_usage_count,
-                    "total": daily_quota
+                    "total": daily_quota,
+                    "reset_hours": quota_reset_hours
                 }
             )
     
@@ -1046,7 +1055,9 @@ async def send_message(
                     # We re-fetch user to get latest state in session
                     db.refresh(current_user)
                     
-                    has_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+                    has_24h_subscription = current_user.subscription_expires_at and current_user.subscription_expires_at > datetime.utcnow()
+                    has_monthly_subscription = current_user.monthly_subscription_expires_at and current_user.monthly_subscription_expires_at > datetime.utcnow()
+                    has_subscription = has_24h_subscription or has_monthly_subscription
                     
                     if not is_free_search and not has_subscription:
                         current_user.balance -= total_cost
@@ -1302,7 +1313,7 @@ async def admin_update_setting(
 async def get_public_settings(db: Session = Depends(get_db)):
     """Get public settings (Unauthenticated)"""
     # Define which keys are safe to expose
-    public_keys = ["subscription_24h_price", "min_search_balance", "search_cost", "subscription_daily_quota", "subscription_monthly_price", "subscription_monthly_quota"]
+    public_keys = ["subscription_24h_price", "min_search_balance", "search_cost", "subscription_daily_quota", "subscription_monthly_price", "subscription_monthly_quota", "quota_reset_hours"]
     
     settings = db.query(Setting).filter(Setting.key.in_(public_keys)).all()
     

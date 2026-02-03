@@ -5,9 +5,11 @@ interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     userEmail: string;
+    has24hSubscription?: boolean;
+    hasMonthlySubscription?: boolean;
 }
 
-const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail }) => {
+const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail, has24hSubscription = false, hasMonthlySubscription = false }) => {
     const { t } = useTranslation();
     const [amount, setAmount] = useState('50');
     const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +19,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
     const [dailyQuota, setDailyQuota] = useState('100');
     const [monthlyPrice, setMonthlyPrice] = useState('500');
     const [monthlyQuota, setMonthlyQuota] = useState('100');
+    const [quotaResetHours, setQuotaResetHours] = useState('24');
     const [agreedToFairUsage, setAgreedToFairUsage] = useState(false);
 
     // Fetch subscription price and quota on mount
@@ -34,6 +37,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
                     if (mPrice) setMonthlyPrice(mPrice.value);
                     const mQuota = data.find((s: any) => s.key === 'subscription_monthly_quota');
                     if (mQuota) setMonthlyQuota(mQuota.value);
+                    const resetHours = data.find((s: any) => s.key === 'quota_reset_hours');
+                    if (resetHours) setQuotaResetHours(resetHours.value);
                 }
             } catch (e) {
                 console.error("Failed to fetch settings", e);
@@ -159,10 +164,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
 
                         {/* 24-Hour Pass Card */}
                         <button
-                            onClick={() => { setMode('subscription'); setAgreedToFairUsage(false); }}
-                            className={`relative p-3 rounded-2xl border-2 text-left transition-all ${mode === 'subscription'
-                                ? 'border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-500/20'
-                                : 'border-slate-200 bg-white hover:border-slate-300'
+                            onClick={() => { if (!has24hSubscription && !hasMonthlySubscription) { setMode('subscription'); setAgreedToFairUsage(false); } }}
+                            disabled={has24hSubscription || hasMonthlySubscription}
+                            className={`relative p-3 rounded-2xl border-2 text-left transition-all ${has24hSubscription || hasMonthlySubscription
+                                ? 'border-slate-200 bg-slate-100 opacity-60 cursor-not-allowed'
+                                : mode === 'subscription'
+                                    ? 'border-indigo-500 bg-indigo-50 shadow-lg shadow-indigo-500/20'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
                                 }`}
                         >
                             {mode === 'subscription' && (
@@ -184,7 +192,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
                                     <svg className="w-2.5 h-2.5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                     </svg>
-                                    <span>{t('questionsPerDay', { count: parseInt(dailyQuota) })}</span>
+                                    <span>{t('questionsPerHours', { count: parseInt(dailyQuota), hours: quotaResetHours })}</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-[10px] text-slate-600">
                                     <svg className="w-2.5 h-2.5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
@@ -197,10 +205,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
 
                         {/* Monthly Pass Card */}
                         <button
-                            onClick={() => { setMode('monthly'); setAgreedToFairUsage(false); }}
-                            className={`relative p-3 rounded-2xl border-2 text-left transition-all ${mode === 'monthly'
-                                ? 'border-purple-500 bg-purple-50 shadow-lg shadow-purple-500/20'
-                                : 'border-slate-200 bg-white hover:border-slate-300'
+                            onClick={() => { if (!has24hSubscription && !hasMonthlySubscription) { setMode('monthly'); setAgreedToFairUsage(false); } }}
+                            disabled={has24hSubscription || hasMonthlySubscription}
+                            className={`relative p-3 rounded-2xl border-2 text-left transition-all ${has24hSubscription || hasMonthlySubscription
+                                ? 'border-slate-200 bg-slate-100 opacity-60 cursor-not-allowed'
+                                : mode === 'monthly'
+                                    ? 'border-purple-500 bg-purple-50 shadow-lg shadow-purple-500/20'
+                                    : 'border-slate-200 bg-white hover:border-slate-300'
                                 }`}
                         >
                             {mode === 'monthly' && (
@@ -225,7 +236,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
                                     <svg className="w-2.5 h-2.5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                     </svg>
-                                    <span>{t('questionsPerDay', { count: parseInt(monthlyQuota) })}</span>
+                                    <span>{t('questionsPerHours', { count: parseInt(monthlyQuota), hours: quotaResetHours })}</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-[10px] text-slate-600">
                                     <svg className="w-2.5 h-2.5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
@@ -281,7 +292,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, userEmail 
                                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                     </svg>
                                     <p className={`text-xs leading-relaxed ${mode === 'monthly' ? 'text-purple-800' : 'text-amber-800'}`}>
-                                        <strong>{t('fairUsageTitle')}:</strong> {t('fairUsageWarning', { quota: mode === 'monthly' ? monthlyQuota : dailyQuota })}
+                                        <strong>{t('fairUsageTitle')}:</strong> {t('fairUsageWarning', { quota: mode === 'monthly' ? monthlyQuota : dailyQuota, hours: quotaResetHours })}
                                         {mode === 'monthly' && <span className="block mt-1">{t('monthlyDuration')}</span>}
                                     </p>
                                 </div>
