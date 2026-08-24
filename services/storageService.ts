@@ -1,195 +1,111 @@
 import { User, ChatSession, Message, Language, Attachment } from '../types';
+import { supabase, setAuthSuppressed, isAuthSuppressed } from './supabase';
 
-// API Base URL (Relative because of Vite Proxy)
 // API Base URL (Relative because of Vite Proxy)
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-// --- AUTH ---
+// --- AUTH (Supabase) ---
 
-export const registerUser = async (name: string, email: string, phoneNumber: string, password: string): Promise<{ message: string; expires_in: number; phone_number: string; dev_code?: string }> => {
-    try {
-        const res = await fetch(`${API_URL}/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, phone_number: phoneNumber, password })
-        });
+// Map the backend /users/me response to the app's User shape.
+const mapUser = (u: any): User => ({
+    id: u.id.toString(),
+    username: u.username,
+    name: u.name || undefined,
+    email: u.email,
+    createdAt: u.created_at ? new Date(u.created_at) : new Date(),
+    authProvider: u.auth_provider || 'supabase',
+    balance: u.balance || 0,
+    is_admin: u.is_admin || false,
+    is_verified: u.is_verified || false,
+    subscription_expires_at: u.subscription_expires_at || undefined,
+    monthly_subscription_expires_at: u.monthly_subscription_expires_at || undefined,
+});
 
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('Registration error response:', errorText);
-            let errorData;
-            try {
-                errorData = JSON.parse(errorText);
-            } catch {
-                throw new Error('Registration failed: ' + errorText);
-            }
-            throw new Error(errorData.detail || 'Registration failed');
-        }
-
-        // Phase 1 returns verification info, NOT the user
-        return await res.json();
-    } catch (error: any) {
-        console.error('Registration error:', error);
-        throw error;
-    }
+// Fetch the app profile for the current Supabase session.
+const fetchProfile = async (accessToken: string): Promise<User> => {
+    const res = await fetch(`${API_URL}/users/me`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (!res.ok) throw new Error('Failed to load profile');
+    return mapUser(await res.json());
 };
 
-export const completeRegistration = async (phoneNumber: string, code: string): Promise<{ success: true; message: string }> => {
+// Sign up with email + password. Does NOT log the user in — after creating the
+// account we sign out (when confirmation is off) so the user logs in manually
+// with their new credentials. Returns whether email confirmation is pending.
+export const registerUser = async (
+    name: string, email: string, phoneNumber: string, password: string
+): Promise<{ needsConfirmation: boolean }> => {
+    setAuthSuppressed(true);
     try {
-        const res = await fetch(`${API_URL}/auth/verify-registration`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone_number: phoneNumber, code })
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: name, phone: phoneNumber } }
         });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('Verification error response:', errorText);
-            let errorData;
-            try {
-                errorData = JSON.parse(errorText);
-            } catch {
-                throw new Error('Verification failed: ' + errorText);
-            }
-            throw new Error(errorData.detail || 'Verification failed');
+        if (error) throw new Error(error.message);
+        // If confirmation is OFF, signUp returns a live session — drop it so the
+        // user is not auto-logged-in and must sign in manually.
+        if (data.session) {
+            await supabase.auth.signOut();
         }
-
-        // Don't save token - user needs to login manually
-        // Just return success indicator
-        return {
-            success: true,
-            message: 'Registration completed successfully. Please login.'
-        };
-    } catch (error: any) {
-        console.error('Complete registration error:', error);
-        throw error;
+        return { needsConfirmation: !data.session };
+    } finally {
+        setAuthSuppressed(false);
     }
 };
 
 export const loginUser = async (email: string, password: string): Promise<User> => {
-    try {
-        const res = await fetch(`${API_URL}/auth/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('Login error response:', errorText);
-            throw new Error('Invalid credentials');
-        }
-
-        const data = await res.json();
-        localStorage.setItem('token', data.access_token);
-        return {
-            id: data.user_id.toString(),
-            username: data.username,
-            createdAt: new Date(),
-            authProvider: 'local',
-            balance: 0
-        };
-    } catch (error: any) {
-        console.error('Login error:', error);
-        throw error;
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Login failed');
+    localStorage.setItem('token', token);
+    return fetchProfile(token);
 };
 
-export const loginWithGoogle = async (): Promise<User & { needs_phone_number?: boolean }> => {
-    try {
-        // Import Firebase auth dynamically
-        const { signInWithPopup } = await import('firebase/auth');
-        const { auth, googleProvider } = await import('./firebase');
-
-        // Open Google Sign-In popup
-        const result = await signInWithPopup(auth, googleProvider);
-
-        // Get user info from Google
-        const firebaseUser = result.user;
-        const username = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
-        const email = firebaseUser.email || '';
-
-        // Send to backend to create/login user
-        const res = await fetch(`${API_URL}/auth/google`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username,
-                email,
-                firebaseUid: firebaseUser.uid,
-                photoURL: firebaseUser.photoURL
-            })
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('Google login error:', errorText);
-            throw new Error("Login failed");
-        }
-
-        const data = await res.json();
-        console.log('Backend Google login response:', data);
-        localStorage.setItem('token', data.access_token);
-        const userResult = {
-            id: data.user_id.toString(),
-            username: data.username,
-            createdAt: new Date(),
-            authProvider: 'google' as const,
-            balance: 0,
-            needs_phone_number: data.needs_phone_number || false
-        };
-        console.log('Returning user object:', userResult);
-        return userResult;
-    } catch (error: any) {
-        console.error('Google login error:', error);
-        if (error.code === 'auth/popup-closed-by-user') {
-            throw new Error('Sign-in cancelled');
-        }
-        throw error;
-    }
+// Starts the Google OAuth redirect. The page navigates away and returns with a
+// session, which observeAuthState picks up. Nothing is returned synchronously.
+export const loginWithGoogle = async (): Promise<void> => {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin }
+    });
+    if (error) throw new Error(error.message);
 };
 
 export const logoutUser = async (): Promise<void> => {
+    await supabase.auth.signOut();
     localStorage.removeItem('token');
 };
 
 export const observeAuthState = (callback: (user: User | null) => void) => {
-    // Check if token exists
-    const token = localStorage.getItem('token');
-    if (token) {
-        // Fetch full user data from backend to get is_admin, balance, etc.
-        fetch(`${API_URL}/users/me`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(res => {
-                if (!res.ok) {
-                    throw new Error('Token invalid');
-                }
-                return res.json();
-            })
-            .then(userData => {
-                callback({
-                    id: userData.id.toString(),
-                    username: userData.username,
-                    email: userData.email,
-                    createdAt: new Date(userData.created_at),
-                    authProvider: userData.auth_provider || 'local',
-                    balance: userData.balance || 0,
-                    is_admin: userData.is_admin || false,
-                    is_verified: userData.is_verified || false,
-                    subscription_expires_at: userData.subscription_expires_at || undefined,
-                    monthly_subscription_expires_at: userData.monthly_subscription_expires_at || undefined
-                });
-            })
-            .catch(error => {
-                console.error('Error fetching user data:', error);
-                localStorage.removeItem('token');
+    const handle = async (accessToken: string | undefined) => {
+        // Ignore transient auth events while signing up (create-then-signout).
+        if (isAuthSuppressed()) return;
+        if (accessToken) {
+            localStorage.setItem('token', accessToken);
+            try {
+                callback(await fetchProfile(accessToken));
+            } catch (e) {
+                console.error('Error fetching user data:', e);
                 callback(null);
-            });
-    } else {
-        callback(null);
-    }
-    return () => { }; // Unsubscribe function
+            }
+        } else {
+            localStorage.removeItem('token');
+            callback(null);
+        }
+    };
+
+    // Initial session (also completes an OAuth redirect if present)
+    supabase.auth.getSession().then(({ data }) => handle(data.session?.access_token));
+
+    // React to sign-in / sign-out / token refresh
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+        handle(session?.access_token);
+    });
+
+    return () => sub.subscription.unsubscribe();
 };
 
 // --- PHONE VERIFICATION ---
@@ -247,7 +163,8 @@ export const getUserSessions = async (userId: string): Promise<ChatSession[]> =>
                 id: m.id.toString(),
                 role: m.role,
                 text: m.content,
-                timestamp: new Date(m.timestamp)
+                timestamp: new Date(m.timestamp),
+                legalCitations: m.legalCitations || undefined
             })),
             updatedAt: d.updated_at ? new Date(d.updated_at) : new Date()
         }));
@@ -338,6 +255,7 @@ export const sendMessageToBackend = async (
             text: d.text,
             timestamp: new Date(d.timestamp),
             groundingSources: d.groundingSources,
+            legalCitations: d.legalCitations || undefined,
             quotaInfo: d.quotaInfo // Include quota info for frontend warnings
         };
     } catch (error) {

@@ -15,6 +15,7 @@ export interface Message {
   timestamp: Date;
   isError?: boolean;
   groundingSources?: GroundingSource[];
+  legalCitations?: LegalCitation[]; // Verified Ethiopian-law provisions grounding the answer
   attachments?: Attachment[];
   quotaInfo?: QuotaInfo; // For subscription users - shows usage stats
 }
@@ -22,6 +23,16 @@ export interface Message {
 export interface GroundingSource {
   title?: string;
   uri?: string;
+}
+
+export interface LegalCitation {
+  id?: number;
+  law_code: string;
+  article?: string | null;
+  title?: string | null;
+  snippet: string;
+  source_url?: string | null;
+  relevance?: number;
 }
 
 export interface QuotaInfo {
@@ -33,10 +44,11 @@ export interface QuotaInfo {
 export interface User {
   id: string;
   username: string;
+  name?: string; // Full display name from signup
   email?: string;
-  // passwordHash removed - auth handled by Firebase
+  // Auth is handled by Supabase Auth
   createdAt: Date;
-  authProvider: 'local' | 'google';
+  authProvider: 'local' | 'google' | 'supabase';
   balance: number;
   is_admin?: boolean;
   is_verified?: boolean;

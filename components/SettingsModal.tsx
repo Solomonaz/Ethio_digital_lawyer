@@ -8,6 +8,7 @@ interface SettingsModalProps {
     user: User | null;
     onAddFunds: () => void;
     onLogout: () => void;
+    onContactAdmin: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -15,7 +16,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose,
     user,
     onAddFunds,
-    onLogout
+    onLogout,
+    onContactAdmin
 }) => {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'account' | 'billing'>('account');
@@ -52,7 +54,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <p className="text-sm text-slate-500">{t('manageAccount')}</p>
                         </div>
                     </div>
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
                     >
@@ -70,7 +72,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     ].map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => {
+                                // Billing takes the user straight to the payment details
+                                if (tab.id === 'billing') { onAddFunds(); return; }
+                                setActiveTab(tab.id as any);
+                            }}
                             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === tab.id
                                 ? 'border-emerald-500 text-emerald-600'
                                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -94,7 +100,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div className="flex items-center gap-4">
                                     <div className="relative">
                                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-emerald-500/25">
-                                            {user.username?.charAt(0).toUpperCase()}
+                                            {(user.name || user.username)?.charAt(0).toUpperCase()}
                                         </div>
                                         <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-3 border-white rounded-full flex items-center justify-center">
                                             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -103,7 +109,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="text-lg font-semibold text-slate-900">{user.username}</h3>
+                                        <h3 className="text-lg font-semibold text-slate-900">{user.name || user.username}</h3>
                                         <p className="text-sm text-slate-500">{user.email || t('noEmailSet')}</p>
                                         <div className="flex items-center gap-2 mt-2">
                                             <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
@@ -152,6 +158,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </div>
                             </div>
 
+                            {/* Contact Admin Button */}
+                            <button
+                                onClick={() => {
+                                    onContactAdmin();
+                                    onClose();
+                                }}
+                                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-all"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7z" />
+                                </svg>
+                                {t('contactAdmin')}
+                            </button>
+
                             {/* Logout Button */}
                             <button
                                 onClick={onLogout}
@@ -162,90 +182,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </svg>
                                 {t('logout')}
                             </button>
-                        </div>
-                    )}
-
-                    {/* Billing Tab */}
-                    {activeTab === 'billing' && user && (
-                        <div className="space-y-6">
-                            {/* Balance Card - Only show for pay-as-you-go users */}
-                            {!(user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date()) && (
-                                <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-xl shadow-emerald-500/25">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm font-medium text-emerald-100 uppercase tracking-wider">{t('balance')}</span>
-                                        <div className="w-3 h-3 rounded-full bg-white/30 animate-pulse"></div>
-                                    </div>
-                                    <div className="flex items-baseline gap-2 mb-6">
-                                        <span className="text-4xl font-bold">{Math.max(0, user.balance || 0).toLocaleString()}</span>
-                                        <span className="text-lg text-emerald-100">ETB</span>
-                                    </div>
-                                    <button
-                                        onClick={() => {
-                                            onAddFunds();
-                                            onClose();
-                                        }}
-                                        className="w-full py-3 px-4 rounded-xl bg-white text-emerald-600 font-semibold hover:bg-emerald-50 transition-all shadow-lg"
-                                    >
-                                        + {t('addFunds')}
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* 24h Subscription Status */}
-                            {user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date() && (
-                                <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-xl shadow-indigo-500/25 animate-scale-in">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm font-medium text-indigo-100 uppercase tracking-wider">{t('activePass')}</span>
-                                        <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">{t('unlimited24h')}</span>
-                                    </div>
-                                    <div className="mb-2">
-                                        <p className="text-indigo-100 text-sm">{t('expiresOn')}</p>
-                                        <p className="text-xl font-bold">
-                                            {new Date(user.subscription_expires_at).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="text-sm text-indigo-100/80 italic">
-                                        * {t('unlimitedSearchesNote')}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Monthly Subscription Status */}
-                            {user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date() && (
-                                <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-xl shadow-purple-500/25 animate-scale-in">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm font-medium text-purple-100 uppercase tracking-wider">{t('activePass')}</span>
-                                        <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">{t('unlimitedMonthly')}</span>
-                                    </div>
-                                    <div className="mb-2">
-                                        <p className="text-purple-100 text-sm">{t('expiresOn')}</p>
-                                        <p className="text-xl font-bold">
-                                            {new Date(user.monthly_subscription_expires_at).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="text-sm text-purple-100/80 italic">
-                                        * {t('unlimitedSearchesNote')}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Pricing Info */}
-                            {/* <div className="space-y-4">
-                                <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{t('pricingss')}</h4>
-                                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                            <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-amber-800">{t('costPerQuery')}</p>
-                                            <p className="text-sm text-amber-700 mt-1">{t('costDescription')}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div> */}
                         </div>
                     )}
 

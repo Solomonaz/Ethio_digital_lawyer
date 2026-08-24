@@ -15,6 +15,7 @@ interface SidebarProps {
   onLogout: () => void;
   onOpenSettings: () => void;
   onAddFunds: () => void;
+  onOpenDocuments: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -28,7 +29,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onDeleteSession,
   onLogout,
   onOpenSettings,
-  onAddFunds
+  onAddFunds,
+  onOpenDocuments
 }) => {
   const { t } = useTranslation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -186,6 +188,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {isOpen && <span>{t('newChat')}</span>}
               </button>
             </Tooltip>
+
+            {/* Legal Documents Button */}
+            <Tooltip label={t('legalDocuments')}>
+              <button
+                onClick={() => {
+                  onOpenDocuments();
+                  if (window.innerWidth < 768) toggleSidebar();
+                }}
+                className={`mt-2 group text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 border border-slate-700/60 font-medium text-sm flex items-center justify-center transition-all ${isOpen ? 'w-full py-2.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {isOpen && <span>{t('legalDocuments')}</span>}
+              </button>
+            </Tooltip>
           </div>
 
           {/* Divider for collapsed state */}
@@ -301,12 +319,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <div className="relative">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm group-hover:from-slate-600 group-hover:to-slate-500 transition-all">
-                          {user.username?.charAt(0).toUpperCase()}
+                          {(user.name || user.username)?.charAt(0).toUpperCase()}
                         </div>
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
                       </div>
                       <div className="animate-fade-in">
-                        <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.username}</p>
+                        <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.name || user.username}</p>
                         <p className="text-[10px] text-slate-500 flex items-center gap-1">
                           <span className={`w-1.5 h-1.5 rounded-full ${user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date()
                             ? 'bg-purple-500'
@@ -345,7 +363,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         className="relative"
                       >
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm hover:from-slate-600 hover:to-slate-500 transition-all border border-slate-600/50">
-                          {user.username?.charAt(0).toUpperCase()}
+                          {(user.name || user.username)?.charAt(0).toUpperCase()}
                         </div>
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
                       </button>
@@ -360,7 +378,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                       {/* User info header in popup */}
                       <div className="px-3 py-2 border-b border-slate-700/50 mb-1">
-                        <p className="text-sm font-medium text-white truncate">{user.username}</p>
+                        <p className="text-sm font-medium text-white truncate">{user.name || user.username}</p>
                         <p className="text-xs text-slate-400 truncate">{user.email || 'User'}</p>
                       </div>
 

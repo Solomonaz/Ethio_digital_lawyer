@@ -120,6 +120,34 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
               </div>
             )}
 
+            {/* Verified legal sources — compact chips (only shown when relevant provisions were found) */}
+            {!isUser && !isError && message.legalCitations && message.legalCitations.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 animate-fade-in">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{t('legalSources')}:</span>
+                {message.legalCitations.map((c, idx) => {
+                  const label = c.law_code + (c.article ? `, ${c.article}` : '');
+                  const inner = (
+                    <>
+                      <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span className="truncate max-w-[240px]">{label}</span>
+                      {c.source_url && <svg className="w-2.5 h-2.5 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>}
+                    </>
+                  );
+                  return c.source_url ? (
+                    <a key={idx} href={c.source_url} target="_blank" rel="noopener noreferrer" title={c.title || label}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 hover:border-emerald-200 px-2.5 py-1 rounded-full transition-colors">
+                      {inner}
+                    </a>
+                  ) : (
+                    <span key={idx} title={c.title || label}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full">
+                      {inner}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Copy Button - Integrated & Minimal for Document Mode */}
             {!isUser && !isError && (
               <div className="mt-2 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-200">
