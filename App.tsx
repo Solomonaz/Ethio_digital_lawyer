@@ -4,18 +4,26 @@ import ChatMessage from './components/ChatMessage';
 import Sidebar from './components/Sidebar';
 import DisclaimerModal from './components/DisclaimerModal';
 import AuthModal from './components/AuthModal';
+import LandingPage from './components/LandingPage';
 import PaymentModal from './components/PaymentModal';
+import ContactAdminModal from './components/ContactAdminModal';
+import DocumentsModal from './components/DocumentsModal';
 import SuccessModal from './components/SuccessModal';
 import SettingsModal from './components/SettingsModal';
-import AdminDashboard from './components/AdminDashboard';
+// Code-split: the admin dashboard is only loaded for admins, not in the initial bundle.
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 import QuotaExhaustedModal from './components/QuotaExhaustedModal';
 import { observeAuthState, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
 import { Message, Language, Attachment, User, ChatSession } from './types';
+import { API_URL } from './constants';
 
 const App: React.FC = () => {
   const { t, i18n } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  // Landing → auth flow for logged-out visitors: null shows the landing page,
+  // 'login'/'signup' opens the auth screen on that tab.
+  const [authMode, setAuthMode] = useState<null | 'login' | 'signup'>(null);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
@@ -23,6 +31,8 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isContactAdminOpen, setIsContactAdminOpen] = useState(false);
+  const [isDocumentsOpen, setIsDocumentsOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -69,14 +79,14 @@ const App: React.FC = () => {
         const txRef = urlParams.get('tx_ref');
         if (txRef) {
           const token = localStorage.getItem('token');
-          fetch(`http://127.0.0.1:8000/payment/verify/${txRef}`, {
+          fetch(`${API_URL}/payment/verify/${txRef}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
             .then(res => res.json())
             .then(data => {
               if (data.status === 'success' || data.message === "Payment already verified") {
                 window.history.replaceState({}, document.title, window.location.pathname);
-                fetch('http://127.0.0.1:8000/users/me', {
+                fetch(`${API_URL}/users/me`, {
                   headers: { 'Authorization': `Bearer ${token}` }
                 })
                   .then(r => r.json())
@@ -119,7 +129,7 @@ const App: React.FC = () => {
 
 
         // Fetch dynamic minimum balance
-        fetch('http://127.0.0.1:8000/settings/min-balance')
+        fetch(`${API_URL}/settings/min-balance`)
           .then(res => res.json())
           .then(data => setMinRequiredBalance(data.min_balance || 10.0))
           .catch(() => setMinRequiredBalance(10.0));
@@ -267,7 +277,7 @@ const App: React.FC = () => {
 
       // Update user balance if not free search (optimistic update or fetch from backend)
       if (!sessionIsFree) {
-        fetch('http://127.0.0.1:8000/users/me', {
+        fetch(`${API_URL}/users/me`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         })
           .then(r => r.json())
@@ -476,7 +486,7 @@ const App: React.FC = () => {
           )}
           <span className="font-medium text-sm">{toast.message}</span>
           {toast.persistent && (
-            <button
+            <button aria-label="Close"
               onClick={() => setToast(null)}
               className="ml-2 w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
             >
@@ -486,7 +496,20 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {!currentUser && <AuthModal onLogin={handleLogin} />}
+      {!currentUser && (
+        authMode === null ? (
+          <LandingPage
+            onGetStarted={() => setAuthMode('signup')}
+            onLogin={() => setAuthMode('login')}
+          />
+        ) : (
+          <AuthModal
+            onLogin={handleLogin}
+            initialView={authMode}
+            onBack={() => setAuthMode(null)}
+          />
+        )
+      )}
 
       {currentUser && (
         <>
@@ -565,6 +588,7 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onAddFunds={() => setIsPaymentModalOpen(true)}
+            onOpenDocuments={() => setIsDocumentsOpen(true)}
           />
 
           <SettingsModal
@@ -576,6 +600,7 @@ const App: React.FC = () => {
               setIsPaymentModalOpen(true);
             }}
             onLogout={handleLogout}
+            onContactAdmin={() => setIsContactAdminOpen(true)}
           />
 
           <PaymentModal
@@ -584,6 +609,17 @@ const App: React.FC = () => {
             userEmail={currentUser?.email || currentUser?.username + '@ethiolex.com'}
             has24hSubscription={has24hSubscription}
             hasMonthlySubscription={hasMonthlySubscription}
+          />
+
+          <ContactAdminModal
+            isOpen={isContactAdminOpen}
+            onClose={() => setIsContactAdminOpen(false)}
+          />
+
+          <DocumentsModal
+            isOpen={isDocumentsOpen}
+            onClose={() => setIsDocumentsOpen(false)}
+            onRecharge={() => setIsPaymentModalOpen(true)}
           />
 
           {/* Main Content Area */}
@@ -599,6 +635,7 @@ const App: React.FC = () => {
               <div className="flex items-center gap-4">
                 {/* Mobile Menu Button */}
                 <button
+                  aria-label={t('toggleSidebar')}
                   onClick={() => setIsSidebarOpen(true)}
                   className="md:hidden p-2 -ml-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
                 >
@@ -677,9 +714,11 @@ const App: React.FC = () => {
             </header>
 
             {/* Chat Area */}
-            <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 scroll-smooth">
+            <main id="main-content" className="flex-1 overflow-y-auto px-4 py-6 md:px-8 scroll-smooth">
               {showAdminDashboard ? (
-                <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+                <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+                  <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+                </React.Suspense>
               ) : (
                 <div className="max-w-3xl mx-auto">
                   {/* Welcome State */}
@@ -757,7 +796,7 @@ const App: React.FC = () => {
                             <span className="text-[10px] text-slate-500 truncate w-full text-center font-medium">{att.name}</span>
                           </div>
                         )}
-                        <button
+                        <button aria-label="Close"
                           onClick={() => removeAttachment(index)}
                           className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition-colors"
                         >
@@ -804,6 +843,7 @@ const App: React.FC = () => {
 
                   {/* Attachment Button */}
                   <button
+                    aria-label={t('uploadFile')}
                     onClick={() => fileInputRef.current?.click()}
                     className="p-3 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all disabled:opacity-50"
                     disabled={isRecording || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
@@ -815,6 +855,7 @@ const App: React.FC = () => {
 
                   {/* Voice Button */}
                   <button
+                    aria-label={isRecording ? t('stopRecording') : t('voiceInput')}
                     onClick={isRecording ? stopListening : startListening}
                     className={`p-3 rounded-xl transition-all ${isRecording
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
@@ -853,6 +894,7 @@ const App: React.FC = () => {
 
                   {/* Send Button */}
                   <button
+                    aria-label={t('send')}
                     onClick={() => handleSendMessage()}
                     disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
                     className={`p-3 rounded-xl transition-all ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)

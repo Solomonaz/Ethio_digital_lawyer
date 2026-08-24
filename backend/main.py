@@ -1,17 +1,43 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime
 import os
+import sys
 from dotenv import load_dotenv
 import base64
 import re
+import hmac
+import hashlib
+import json
+import secrets
+
+
+def _generate_verification_code() -> str:
+    """Cryptographically secure 6-digit verification code (100000-999999)."""
+    return str(secrets.randbelow(900000) + 100000)
+
+# Windows consoles default to cp1252, which cannot encode emoji used in our
+# log/print statements — that would raise UnicodeEncodeError and crash requests.
+# Force UTF-8 output so logging can never break an endpoint.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+# --- Receipt uploads (manual payments) ---
+RECEIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "receipts")
+os.makedirs(RECEIPTS_DIR, exist_ok=True)
+ALLOWED_RECEIPT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
+MAX_RECEIPT_BYTES = 5 * 1024 * 1024  # 5 MB
 
 from database import engine, Base, get_db
-from models import User, Chat, ChatMessage, Payment, Setting, UsageLog, PendingRegistration
+from models import User, Chat, ChatMessage, Payment, Setting, UsageLog, PendingRegistration, LegalProvision
 import uuid
 from schemas import (
     UserCreate, UserLogin, UserResponse, Token,
@@ -24,6 +50,7 @@ from auth import (
 
 from google import genai
 from google.genai import types
+import legal_service
 
 load_dotenv()
 
@@ -52,14 +79,23 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     # Content Security Policy
     # Note: connect-src needs to include the API URL
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com;"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com https://*.supabase.co wss://*.supabase.co;"
     return response
 
 # --- CORS MIDDLEWARE ---
-# Must be added LAST (runs FIRST) to handle OPTIONS requests before other middleware
+# Must be added LAST (runs FIRST) to handle OPTIONS requests before other middleware.
+# Restrict to an explicit allowlist instead of "*". Configure extra origins for
+# production via CORS_ORIGINS (comma-separated) in the environment.
+_default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_env_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+ALLOWED_ORIGINS = list(dict.fromkeys(_default_origins + _env_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, replace with specific origins
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,6 +147,71 @@ When drafting legal documents:
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
+from supabase_auth import verify_supabase_token
+
+
+def _get_or_create_user_from_supabase(claims: dict, db: Session) -> Optional[User]:
+    """Resolve the app profile for a verified Supabase user, creating/linking it.
+
+    - Matches an existing profile by supabase_uid, then by email (linking it, which
+      preserves is_admin / balance / subscription for pre-existing users).
+    - Otherwise creates a new profile keyed to the Supabase user.
+    """
+    supabase_uid = claims.get("sub")
+    email = (claims.get("email") or "").lower().strip() or None
+    email_verified = bool((claims.get("user_metadata") or {}).get("email_verified"))
+    if not supabase_uid:
+        return None
+
+    user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
+    if user:
+        return user
+
+    if email:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            # Linking a Supabase identity to a PRE-EXISTING account (which may carry
+            # is_admin / balance) is an account-takeover vector if the email is not
+            # verified. Only link when the email is verified.
+            # NOTE: this is only meaningful when Supabase "Confirm email" is ON.
+            # Keeping confirmation OFF makes email_verified auto-true and re-opens
+            # this vector — confirmation MUST be ON in production.
+            if not email_verified:
+                return None  # 401 — the user must verify their email first
+            user.supabase_uid = supabase_uid
+            if not user.auth_provider or user.auth_provider == "local":
+                user.auth_provider = "supabase"
+            db.commit()
+            db.refresh(user)
+            return user
+
+    # Brand-new user — derive a clean username from the email local part,
+    # adding a small numeric suffix only if that name is already taken.
+    base_username = (email.split("@")[0] if email else f"user{supabase_uid[:8]}")
+    username = base_username
+    n = 2
+    while db.query(User).filter(User.username == username).first():
+        username = f"{base_username}{n}"
+        n += 1
+
+    metadata = claims.get("user_metadata", {}) or {}
+    new_user = User(
+        username=username,
+        name=metadata.get("full_name") or metadata.get("name") or base_username,
+        email=email,
+        phone_number=metadata.get("phone") or None,
+        password_hash=None,
+        auth_provider="supabase",
+        supabase_uid=supabase_uid,
+        is_verified=True,  # Supabase confirmed the identity
+        is_active=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
 # --- Dependency to get current user ---
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
@@ -118,15 +219,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
-    username = decode_access_token(token)
-    if username is None:
+
+    # Auth is Supabase-only: verify the Supabase-issued (ES256) access token.
+    claims = verify_supabase_token(token)
+    if not claims:
         raise credentials_exception
-    
-    user = db.query(User).filter(User.username == username).first()
+
+    user = _get_or_create_user_from_supabase(claims, db)
     if user is None:
         raise credentials_exception
-    
+    if user.is_active is False:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Your account has been deactivated. Please contact support.")
     return user
 
 # --- Dependency to get admin user ---
@@ -186,270 +290,11 @@ def get_quota_reset_hours(db: Session) -> int:
 import random
 from datetime import timedelta
 
-@app.post("/auth/register")
-@limiter.limit("5/minute")
-async def register_step1(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
-    """
-    Phase 1 of Two-Phase Registration:
-    - Validates input
-    - Checks for duplicates
-    - Stores pending registration with verification code
-    - Sends verification code
-    - Does NOT create the user yet
-    """
-    import re
-    
-    # Validate email format
-    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_regex, user_data.email):
-        raise HTTPException(status_code=400, detail="Invalid email format")
-    
-    # Validate phone number format (Ethiopian numbers - Ethiotelecom & Safaricom)
-    phone = user_data.phone_number.strip()
-    if not phone:
-        raise HTTPException(status_code=400, detail="Phone number is required for verification")
-    
-    # Remove spaces, dashes, and parentheses
-    phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
-    
-    # Valid Ethiopian phone formats:
-    # +2519XXXXXXXX (Ethiotelecom) - 13 chars
-    # +2517XXXXXXXX (Safaricom) - 13 chars  
-    # 2519XXXXXXXX or 2517XXXXXXXX - 12 chars
-    # 09XXXXXXXX or 07XXXXXXXX - 10 chars
-    # 9XXXXXXXX or 7XXXXXXXX - 9 chars
-    if not re.match(r'^(\+251|251|0)?[79]\d{8}$', phone_clean):
-        raise HTTPException(
-            status_code=400, 
-            detail="Invalid phone number format. Use: +251 9XX XXX XXX (Ethiotelecom) or +251 7XX XXX XXX (Safaricom)"
-        )
-    
-    # Extract username from email (part before @)
-    username = user_data.email.split('@')[0]
-    
-    # Check if email already exists in users
-    existing_email = db.query(User).filter(User.email == user_data.email).first()
-    if existing_email:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Check if username already exists
-    existing_username = db.query(User).filter(User.username == username).first()
-    if existing_username:
-        raise HTTPException(status_code=400, detail="Username already taken. Please use a different email.")
-    
-    # Check if phone number already exists
-    existing_phone = db.query(User).filter(User.phone_number == phone).first()
-    if existing_phone:
-        raise HTTPException(status_code=400, detail="Phone number already registered")
-    
-    # Delete any existing pending registration with same email or phone
-    db.query(PendingRegistration).filter(
-        (PendingRegistration.email == user_data.email) | (PendingRegistration.phone_number == phone)
-    ).delete()
-    db.commit()
-    
-    # Generate 6-digit verification code
-    code = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=10)  # 10 minutes validity
-    
-    # Hash the password
-    hashed_password = get_password_hash(user_data.password)
-    
-    # Store pending registration
-    pending = PendingRegistration(
-        name=user_data.name,
-        email=user_data.email,
-        phone_number=phone,
-        password_hash=hashed_password,
-        verification_code=code,
-        verification_code_expires=expires_at
-    )
-    db.add(pending)
-    db.commit()
-    
-    # Print code to console for development
-    print(f"\n{'='*50}")
-    print(f"📱 REGISTRATION VERIFICATION CODE for {phone}")
-    print(f"   Code: {code}")
-    print(f"   Email: {user_data.email}")
-    print(f"{'='*50}\n")
-    
-    # Try to send via Telegram if configured
-    telegram_token = os.getenv("TELEGRAM_GATEWAY_API_TOKEN")
-    dev_code = None
-    
-    if telegram_token:
-        from services.telegram_service import TelegramService
-        success = TelegramService.send_verification_code(phone, code)
-        if not success:
-            dev_code = code  # Fallback - show code in response
-    else:
-        dev_code = code  # Development mode - show code in response
-    
-    response_data = {
-        "message": "Verification code sent. Please verify to complete registration.",
-        "expires_in": 600,
-        "phone_number": phone
-    }
-    
-    if dev_code:
-        response_data["dev_code"] = dev_code
-    
-    return response_data
-
-
-@app.post("/auth/verify-registration", response_model=Token)
-@limiter.limit("10/minute")
-async def register_step2(request: Request, data: dict, db: Session = Depends(get_db)):
-    """
-    Phase 2 of Two-Phase Registration:
-    - Verifies the code
-    - Creates the user
-    - Returns access token
-    """
-    phone_number = data.get("phone_number", "").strip()
-    code = data.get("code", "").strip()
-    
-    if not phone_number or not code:
-        raise HTTPException(status_code=400, detail="Phone number and verification code are required")
-    
-    # Find pending registration
-    pending = db.query(PendingRegistration).filter(
-        PendingRegistration.phone_number == phone_number
-    ).first()
-    
-    if not pending:
-        raise HTTPException(status_code=400, detail="No pending registration found. Please start registration again.")
-    
-    # Check expiry
-    if datetime.utcnow() > pending.verification_code_expires:
-        # Delete expired pending registration
-        db.delete(pending)
-        db.commit()
-        raise HTTPException(status_code=400, detail="Verification code has expired. Please register again.")
-    
-    # Verify code
-    if pending.verification_code != code:
-        raise HTTPException(status_code=400, detail="Invalid verification code")
-    
-    # Extract username from email
-    username = pending.email.split('@')[0]
-    
-    # Double-check no user was created in the meantime
-    existing = db.query(User).filter(
-        (User.email == pending.email) | (User.username == username) | (User.phone_number == pending.phone_number)
-    ).first()
-    if existing:
-        db.delete(pending)
-        db.commit()
-        raise HTTPException(status_code=400, detail="This account was already registered. Please login instead.")
-    
-    # Create the actual user now
-    new_user = User(
-        username=username,
-        name=pending.name,
-        email=pending.email,
-        phone_number=pending.phone_number,
-        password_hash=pending.password_hash,
-        auth_provider="local",
-        is_verified=True  # Already verified!
-    )
-    db.add(new_user)
-    
-    # Delete pending registration
-    db.delete(pending)
-    db.commit()
-    db.refresh(new_user)
-    
-    print(f"[REGISTRATION] User {new_user.username} created successfully after phone verification!")
-    
-    # Create access token
-    access_token = create_access_token(data={"sub": new_user.username})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": new_user.id,
-        "username": new_user.username
-    }
-
-@app.post("/auth/token", response_model=Token)
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    """Login with email and password"""
-    user = db.query(User).filter(User.email == user_data.email).first()
-    
-    if not user or not verify_password(user_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    if user.is_active is False:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account has been deactivated. Please contact support.",
-        )
-    
-    access_token = create_access_token(data={"sub": user.username})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "username": user.username
-    }
-
-@app.post("/auth/google", response_model=Token)
-async def google_login(google_data: dict, db: Session = Depends(get_db)):
-    """Google OAuth login"""
-    username = google_data.get("username")
-    email = google_data.get("email")
-    firebase_uid = google_data.get("firebaseUid")
-    
-    if not email:
-        raise HTTPException(status_code=400, detail="Email required")
-    
-    # Extract username from email (part before @)
-    username_from_email = email.split('@')[0]
-    
-    # Try to find user by email first (more reliable)
-    user = db.query(User).filter(User.email == email).first()
-    
-    if not user:
-        # Create new user for Google sign-in
-        # Use email part as username for uniqueness
-        user = User(
-            username=username_from_email,
-            name=username or username_from_email,
-            email=email,
-            phone_number=None,
-            password_hash="",  # No password for Google users
-            auth_provider="google",
-            is_active=True # New users are active by default
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    
-    if user.is_active is False:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account has been deactivated. Please contact support.",
-        )
-    
-    access_token = create_access_token(data={"sub": user.username})
-    
-    # Check if user needs to provide phone number
-    needs_phone = user.phone_number is None or user.phone_number == ""
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_id": user.id,
-        "username": user.username,
-        "needs_phone_number": needs_phone
-    }
+# --- Legacy email/password + Google auth endpoints removed ---
+# Authentication is handled entirely by Supabase Auth (frontend supabase-js
+# for sign-up / sign-in / Google OAuth). The backend only verifies the
+# Supabase-issued token in get_current_user(); there is no server-side
+# password handling or token issuance anymore.
 
 @app.get("/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -490,7 +335,7 @@ async def request_verification_code(
         raise HTTPException(status_code=400, detail="Phone number is required")
     
     # Generate 6-digit code
-    code = str(random.randint(100000, 999999))
+    code = _generate_verification_code()
     
     # Set expiry (5 minutes from now)
     expires_at = datetime.utcnow() + timedelta(minutes=5)
@@ -569,7 +414,38 @@ class PaymentRequest:
         self.first_name = first_name
         self.last_name = last_name
 
-from pydantic import BaseModel as PydanticBaseModel
+from pydantic import BaseModel as PydanticBaseModel, field_validator
+
+# Allowed payment types and the maximum amount we accept in a single transaction (ETB)
+ALLOWED_PAYMENT_TYPES = {"recharge", "subscription_24h", "subscription_monthly"}
+ALLOWED_MANUAL_CHANNELS = {"telebirr", "safaricom", "bank"}
+MIN_PAYMENT_AMOUNT = 1.0
+MAX_PAYMENT_AMOUNT = 1_000_000.0
+
+
+def _parse_valid_amount(v: str) -> str:
+    """Validate a payment amount string; returns a normalised numeric string or raises ValueError."""
+    try:
+        amount = float(v)
+    except (TypeError, ValueError):
+        raise ValueError("Amount must be a valid number")
+    # Reject NaN / infinity (float() accepts 'nan' and 'inf')
+    if amount != amount or amount in (float("inf"), float("-inf")):
+        raise ValueError("Amount must be a finite number")
+    if amount < MIN_PAYMENT_AMOUNT:
+        raise ValueError(f"Amount must be at least {MIN_PAYMENT_AMOUNT} ETB")
+    if amount > MAX_PAYMENT_AMOUNT:
+        raise ValueError(f"Amount must not exceed {MAX_PAYMENT_AMOUNT} ETB")
+    return str(amount)
+
+
+def _validate_payment_type(v: str) -> str:
+    if v not in ALLOWED_PAYMENT_TYPES:
+        raise ValueError(
+            f"Invalid payment_type. Must be one of: {', '.join(sorted(ALLOWED_PAYMENT_TYPES))}"
+        )
+    return v
+
 
 class PaymentInitRequest(PydanticBaseModel):
     amount: str
@@ -577,6 +453,17 @@ class PaymentInitRequest(PydanticBaseModel):
     first_name: str = "EthioLex"
     last_name: str = "User"
     payment_type: str = "recharge"
+
+    @field_validator("payment_type")
+    @classmethod
+    def validate_payment_type(cls, v: str) -> str:
+        return _validate_payment_type(v)
+
+    @field_validator("amount")
+    @classmethod
+    def validate_amount(cls, v: str) -> str:
+        return _parse_valid_amount(v)
+
 
 @app.post("/payment/initialize")
 async def initialize_payment(
@@ -611,9 +498,11 @@ async def initialize_payment(
     print(f"[PAYMENT] Chapa response: {result}")
     
     if not result or result.get("status") != "success":
+        # Log the raw gateway response server-side; return a generic message so we
+        # don't echo the payment provider's internal error body to the client.
         error_msg = result.get("message", "Unknown error") if result else "No response from Chapa"
         print(f"[PAYMENT ERROR] {error_msg}")
-        raise HTTPException(status_code=400, detail=f"Payment initialization failed: {error_msg}")
+        raise HTTPException(status_code=502, detail="Could not start the payment. Please try again in a moment.")
     
     # Save payment record
     new_payment = Payment(
@@ -621,15 +510,153 @@ async def initialize_payment(
         amount=float(request.amount),
         tx_ref=tx_ref,
         status="pending",
-        payment_type=request.payment_type
+        payment_type=request.payment_type,
+        method="chapa"
     )
     db.add(new_payment)
     db.commit()
-    
+
     return {
         "checkout_url": result.get("data", {}).get("checkout_url"),
         "tx_ref": tx_ref
     }
+
+def _is_setting_enabled(db: Session, key: str, default: bool = True) -> bool:
+    """Read a boolean setting; treats missing settings as `default`."""
+    s = db.query(Setting).filter(Setting.key == key).first()
+    if s is None:
+        return default
+    return str(s.value).strip().lower() in ("true", "1", "yes")
+
+
+@app.post("/payment/manual/submit")
+async def submit_manual_payment(
+    amount: str = Form(...),
+    payment_type: str = Form("recharge"),
+    channel: str = Form("telebirr"),
+    reference: str = Form(""),
+    receipt: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Submit a manual (Telebirr/Safaricom/Bank) payment claim for admin confirmation.
+
+    Accepts multipart/form-data so users can attach a receipt image/PDF. Creates a
+    *pending* payment record; no balance is credited here — the admin reviews the
+    receipt and approves it from the dashboard, which credits the user via the same
+    logic as an online payment.
+    """
+    # --- Validate inputs (mirrors the Pydantic validators used elsewhere) ---
+    try:
+        amount = _parse_valid_amount(amount)
+        payment_type = _validate_payment_type(payment_type)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if channel not in ALLOWED_MANUAL_CHANNELS:
+        raise HTTPException(status_code=422, detail="Invalid payment channel")
+
+    reference = (reference or "").strip()
+    if len(reference) > 200:
+        raise HTTPException(status_code=422, detail="Reference must be 200 characters or fewer")
+
+    # Guard: the specific channel the user paid to must be enabled by the admin
+    if not _is_setting_enabled(db, f"{channel}_enabled", default=True):
+        raise HTTPException(status_code=403, detail="This payment option is currently disabled")
+
+    tx_ref = f"manual-{uuid.uuid4().hex[:12]}"
+
+    # --- Receipt is required for manual payments ---
+    if receipt is None or not receipt.filename:
+        raise HTTPException(status_code=422, detail="A payment receipt is required")
+
+    ext = os.path.splitext(receipt.filename)[1].lower()
+    if ext not in ALLOWED_RECEIPT_EXTENSIONS:
+        raise HTTPException(
+            status_code=422,
+            detail="Receipt must be an image (jpg, png, webp, gif) or PDF"
+        )
+    contents = await receipt.read()
+    if len(contents) == 0:
+        raise HTTPException(status_code=422, detail="Receipt file is empty")
+    if len(contents) > MAX_RECEIPT_BYTES:
+        raise HTTPException(status_code=422, detail="Receipt file must be 5 MB or smaller")
+    # Store under a safe, unique name derived from tx_ref (never trust user filename)
+    receipt_filename = f"{tx_ref}{ext}"
+    with open(os.path.join(RECEIPTS_DIR, receipt_filename), "wb") as f:
+        f.write(contents)
+
+    # Store the channel together with the user-supplied reference for the admin's view
+    ref_display = f"{channel}: {reference}" if reference else channel
+
+    new_payment = Payment(
+        user_id=current_user.id,
+        amount=float(amount),
+        tx_ref=tx_ref,
+        status="pending",
+        payment_type=payment_type,
+        method="manual",
+        reference=ref_display,
+        receipt_filename=receipt_filename
+    )
+    db.add(new_payment)
+    db.commit()
+
+    print(f"[MANUAL PAYMENT] {current_user.username} submitted {amount} ETB via {channel} "
+          f"(ref: {reference or 'n/a'}, receipt: {'yes' if receipt_filename else 'no'})")
+
+    return {
+        "status": "submitted",
+        "message": "Your payment request has been submitted. The admin will confirm it shortly.",
+        "tx_ref": tx_ref
+    }
+
+
+def _apply_verified_payment(payment: Payment, db: Session, gateway_amount=None):
+    """Mark a gateway-verified payment successful and credit the user.
+
+    Single source of truth for crediting so the verify, webhook, and admin-approve
+    paths cannot diverge. Idempotent: does nothing new if already successful.
+    Returns the credited User (or None if the user no longer exists).
+
+    IMPORTANT: callers MUST have confirmed the payment with the gateway (or be the
+    admin) before calling this. It never inspects a client-supplied status.
+    """
+    existing_user = db.query(User).filter(User.id == payment.user_id).first()
+    if payment.status == "success":
+        return existing_user
+
+    # Prefer the amount the gateway actually confirmed over the requested amount
+    paid_amount = payment.amount
+    if gateway_amount is not None:
+        try:
+            paid_amount = float(gateway_amount)
+        except (TypeError, ValueError):
+            paid_amount = payment.amount
+    payment.amount = paid_amount
+    payment.status = "success"
+
+    user = existing_user
+    if not user:
+        db.commit()
+        return None
+
+    now = datetime.utcnow()
+    if payment.payment_type == "subscription_24h":
+        start_time = user.subscription_expires_at if (user.subscription_expires_at and user.subscription_expires_at > now) else now
+        user.subscription_expires_at = start_time + timedelta(hours=24)
+        print(f"[SUBSCRIPTION] 24h activated for user {user.username}, expires: {user.subscription_expires_at}")
+    elif payment.payment_type == "subscription_monthly":
+        start_time = user.monthly_subscription_expires_at if (user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now) else now
+        user.monthly_subscription_expires_at = start_time + timedelta(days=30)
+        print(f"[SUBSCRIPTION] Monthly activated for user {user.username}, expires: {user.monthly_subscription_expires_at}")
+    else:
+        user.balance += paid_amount
+
+    db.commit()
+    db.refresh(user)
+    return user
+
 
 @app.get("/payment/verify/{tx_ref}")
 async def verify_payment(
@@ -637,89 +664,63 @@ async def verify_payment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Verify payment status and credit balance if successful"""
+    """Verify payment status with Chapa and credit balance if successful."""
     payment = db.query(Payment).filter(Payment.tx_ref == tx_ref).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
-    
+
     # Already processed
     if payment.status == "success":
         return {"status": "success", "message": "Payment already verified", "balance": current_user.balance}
-    
+
     result = ChapaService.verify_payment(tx_ref)
-    
-    if result and result.get("status") == "success":
-        data = result.get("data", {})
-        if data.get("status") == "success":
-            payment.status = "success"
-            
-            # Credit User Balance OR Activate Subscription
-            user = db.query(User).filter(User.id == payment.user_id).first()
-            if user:
-                if payment.payment_type == "subscription_24h":
-                    # Extend 24h subscription
-                    now = datetime.utcnow()
-                    start_time = now
-                    if user.subscription_expires_at and user.subscription_expires_at > now:
-                        start_time = user.subscription_expires_at
-                    
-                    user.subscription_expires_at = start_time + timedelta(hours=24)
-                    print(f"[SUBSCRIPTION] 24h activated for user {user.username}, expires: {user.subscription_expires_at}")
-                elif payment.payment_type == "subscription_monthly":
-                    # Extend monthly subscription (30 days)
-                    now = datetime.utcnow()
-                    start_time = now
-                    if user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now:
-                        start_time = user.monthly_subscription_expires_at
-                    
-                    user.monthly_subscription_expires_at = start_time + timedelta(days=30)
-                    print(f"[SUBSCRIPTION] Monthly activated for user {user.username}, expires: {user.monthly_subscription_expires_at}")
-                else:
-                    user.balance += payment.amount
-            
-            db.commit()
-            db.refresh(user)
-            
-            return {"status": "success", "message": "Payment verified successfully", "balance": user.balance}
-    
+
+    if result and result.get("status") == "success" and result.get("data", {}).get("status") == "success":
+        user = _apply_verified_payment(payment, db, result["data"].get("amount"))
+        if not user:
+            raise HTTPException(status_code=404, detail="User for this payment no longer exists")
+        return {"status": "success", "message": "Payment verified successfully", "balance": user.balance}
+
     return {"status": "pending", "message": "Payment verification pending or failed"}
 
 @app.post("/payment/callback")
-async def payment_callback(data: dict, db: Session = Depends(get_db)):
-    """Handle Chapa webhook/callback"""
+async def payment_callback(request: Request, db: Session = Depends(get_db)):
+    """Chapa webhook handler.
+
+    SECURITY: this endpoint NEVER trusts the status posted in the request body.
+    A forged POST like {"tx_ref": "...", "status": "success"} cannot credit anyone,
+    because we independently re-verify the transaction with Chapa's API before
+    crediting. If CHAPA_WEBHOOK_SECRET is configured, the signature is also checked.
+    """
+    raw = await request.body()
+
+    # Optional signature verification (defense-in-depth) when a secret is configured.
+    webhook_secret = os.getenv("CHAPA_WEBHOOK_SECRET")
+    if webhook_secret:
+        signature = (request.headers.get("Chapa-Signature")
+                     or request.headers.get("x-chapa-signature") or "")
+        expected = hmac.new(webhook_secret.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        data = json.loads(raw or b"{}")
+    except Exception:
+        data = {}
+
     tx_ref = data.get("tx_ref")
-    status_msg = data.get("status")
-    
-    if tx_ref:
-        payment = db.query(Payment).filter(Payment.tx_ref == tx_ref).first()
-        if payment and payment.status != "success":
-            if status_msg == "success":
-                payment.status = "success"
-                # Credit User Balance OR Activate Subscription
-                user = db.query(User).filter(User.id == payment.user_id).first()
-                if user:
-                    if payment.payment_type == "subscription_24h":
-                         # Extend 24h subscription
-                        now = datetime.utcnow()
-                        start_time = now
-                        if user.subscription_expires_at and user.subscription_expires_at > now:
-                            start_time = user.subscription_expires_at
-                        
-                        user.subscription_expires_at = start_time + timedelta(hours=24)
-                    elif payment.payment_type == "subscription_monthly":
-                         # Extend monthly subscription
-                        now = datetime.utcnow()
-                        start_time = now
-                        if user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now:
-                            start_time = user.monthly_subscription_expires_at
-                        
-                        user.monthly_subscription_expires_at = start_time + timedelta(days=30)
-                    else:
-                        user.balance += payment.amount
-            elif status_msg == "failed":
-                payment.status = "failed"
-            db.commit()
-    
+    if not tx_ref:
+        return {"status": "ignored"}
+
+    payment = db.query(Payment).filter(Payment.tx_ref == tx_ref).first()
+    if not payment or payment.status == "success":
+        return {"status": "ok"}
+
+    # Re-verify with Chapa — the posted status is never trusted.
+    result = ChapaService.verify_payment(tx_ref)
+    if result and result.get("status") == "success" and result.get("data", {}).get("status") == "success":
+        _apply_verified_payment(payment, db, result["data"].get("amount"))
+
     return {"status": "ok"}
 
 # --- CHAT ENDPOINTS ---
@@ -750,7 +751,8 @@ async def get_user_chats(current_user: User = Depends(get_current_user), db: Ses
                 "id": msg.id,
                 "role": msg.role,
                 "content": content,
-                "timestamp": msg.timestamp.isoformat()
+                "timestamp": msg.timestamp.isoformat(),
+                "legalCitations": json.loads(msg.legal_citations) if msg.legal_citations else None
             })
 
         result.append({
@@ -797,14 +799,17 @@ async def delete_chat(
     
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    
-    # Delete all messages first
-    db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).delete()
-    
-    # Delete chat
+
+    # Detach usage logs from this chat (keep the billing history — chat_id is
+    # nullable) so the foreign key doesn't block deletion on Postgres.
+    db.query(UsageLog).filter(UsageLog.chat_id == chat.id).update(
+        {UsageLog.chat_id: None}, synchronize_session=False
+    )
+    # Delete all messages, then the chat
+    db.query(ChatMessage).filter(ChatMessage.chat_id == chat.id).delete(synchronize_session=False)
     db.delete(chat)
     db.commit()
-    
+
     return {"detail": "Chat deleted successfully"}
 
 @app.post("/chats/{chat_id}/message")
@@ -958,13 +963,26 @@ async def send_message(
             parts=current_parts
         ))
         
-        # Configure generation
+        # --- Legal grounding (RAG): retrieve verified provisions so the AI cites
+        # real Ethiopian law instead of inventing citations. Fully graceful: any
+        # failure or empty result falls back to the normal (ungrounded) answer. ---
+        legal_matches = []
+        try:
+            legal_matches = legal_service.search_provisions(db, message_data.message)
+        except Exception as _rag_err:
+            print(f"[LEGAL RAG] retrieval skipped: {_rag_err}")
+        grounding_instruction = legal_service.build_system_addendum(legal_matches)
+        # Citations are finalised AFTER generation — only provisions the model
+        # actually cited are shown (avoids clutter on general-knowledge answers).
+        legal_citations = []
+
+        # Configure generation (system instruction augmented with retrieved law)
         generation_config = types.GenerateContentConfig(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
             # max_output_tokens=2048,
-            system_instruction=SYSTEM_INSTRUCTION
+            system_instruction=SYSTEM_INSTRUCTION + grounding_instruction
         )
         
         # Send message using the new SDK
@@ -987,6 +1005,11 @@ async def send_message(
             # Also clean up any trailing newlines left
             bot_text = bot_text.strip()
         
+        # Finalise citations: show only the provisions the model actually cited.
+        legal_citations = legal_service.citations_payload(
+            legal_service.filter_cited(legal_matches, bot_text)
+        )
+
         # Extract grounding sources if available
         grounding_sources = []
         if hasattr(response, 'grounding_metadata') and response.grounding_metadata:
@@ -997,11 +1020,12 @@ async def send_message(
                         "uri": source.web.uri if hasattr(source.web, 'uri') else None
                     })
         
-        # Save bot response
+        # Save bot response (with the verified citations that grounded it)
         bot_message = ChatMessage(
             chat_id=chat.id,
             role="model",
-            content=bot_text
+            content=bot_text,
+            legal_citations=json.dumps(legal_citations) if legal_citations else None
         )
         db.add(bot_message)
         
@@ -1021,12 +1045,15 @@ async def send_message(
             "text": bot_message.content,
             "timestamp": bot_message.timestamp.isoformat(),
             "groundingSources": grounding_sources if grounding_sources else None,
+            "legalCitations": legal_citations if legal_citations else None,
             "quotaInfo": quota_info  # Include quota info for frontend warnings
         }
         
     except Exception as e:
-        print(f"Gemini API Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+        # Log the real error server-side; return a generic message to the client
+        # so internal details (stack, provider errors, keys) are never exposed.
+        print(f"Gemini API Error: {repr(e)}")
+        raise HTTPException(status_code=502, detail="The AI service is temporarily unavailable. Please try again.")
 
     finally:
         # --- COST TRACKING & BALANCE DEDUCTION ---
@@ -1060,7 +1087,10 @@ async def send_message(
                     has_subscription = has_24h_subscription or has_monthly_subscription
                     
                     if not is_free_search and not has_subscription:
-                        current_user.balance -= total_cost
+                        # Never let the balance drop below zero. The cost is only
+                        # known after generation, so an expensive answer could
+                        # otherwise push a near-empty account into the negative.
+                        current_user.balance = max(0.0, current_user.balance - total_cost)
                     else:
                         reason = "Subscription" if has_subscription else "Free Tier"
                         print(f"[{reason}] Cost of {total_cost:.4f} ETB waived for user {current_user.username}")
@@ -1096,6 +1126,114 @@ async def send_message(
                         print(f"{'='*56}\n")
             except Exception as e:
                 print(f"[COST LOG ERROR] Could not save cost: {e}")
+
+# --- LEGAL DOCUMENT GENERATION ---
+
+@app.post("/documents/generate")
+async def generate_document(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Draft a formal Ethiopian legal document from a template + user-provided fields.
+
+    Requires balance or an active subscription (premium action). Grounds the draft
+    in the verified legal library where relevant and deducts the token cost.
+    """
+    if not gemini_client:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    template_name = (data.get("template_name") or "").strip()
+    if not template_name:
+        raise HTTPException(status_code=422, detail="A document type is required.")
+    fields = data.get("fields") or {}
+    language = "Amharic" if str(data.get("language", "en")).startswith("am") else "English"
+
+    # --- Access gate: subscription or sufficient balance ---
+    now = datetime.utcnow()
+    has_subscription = bool(
+        (current_user.subscription_expires_at and current_user.subscription_expires_at > now)
+        or (current_user.monthly_subscription_expires_at and current_user.monthly_subscription_expires_at > now)
+    )
+    min_balance = get_min_balance(db)
+    if not has_subscription and (current_user.balance or 0) < min_balance:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Please recharge (min {min_balance} ETB) or subscribe to generate documents."
+        )
+
+    # --- Build the details block from the provided fields ---
+    detail_lines = []
+    for k, v in fields.items():
+        v = (str(v) if v is not None else "").strip()
+        if v:
+            detail_lines.append(f"- {k}: {v}")
+    details_block = "\n".join(detail_lines) if detail_lines else "(No specific details provided — use clear placeholders throughout.)"
+
+    # --- Optional grounding from the verified legal library ---
+    grounding = ""
+    try:
+        query = template_name + " " + " ".join(str(v) for v in fields.values() if v)
+        matches = legal_service.search_provisions(db, query)
+        grounding = legal_service.build_system_addendum(matches) if matches else ""
+    except Exception as _e:
+        print(f"[DOC RAG] skipped: {_e}")
+
+    model_setting = db.query(Setting).filter(Setting.key == "model_name").first()
+    active_model = model_setting.value if model_setting else "gemini-2.5-flash"
+
+    system_instruction = (
+        f"You are EthioLex, an expert Ethiopian legal drafter. Draft a COMPLETE, professional, "
+        f"ready-to-use {template_name} under Ethiopian law, written in {language}.\n"
+        "Rules:\n"
+        "- Use correct Ethiopian legal document structure and formal legal language.\n"
+        "- Incorporate the details provided. Where a needed detail is missing, insert a clearly "
+        "bracketed placeholder (e.g. [FULL NAME], [DATE], [AMOUNT]) for the user to complete.\n"
+        "- Include a title, date line, identification of the parties, the operative clauses, and "
+        "signature blocks.\n"
+        "- Reference relevant Ethiopian law where appropriate, but never invent citations.\n"
+        "- Output ONLY the document itself in clean Markdown. No preamble, notes, or explanation."
+        + grounding
+    )
+
+    contents = [types.Content(role="user", parts=[types.Part.from_text(
+        text=f"Draft the {template_name} using these details:\n{details_block}"
+    )])]
+    config = types.GenerateContentConfig(temperature=0.5, top_p=0.95, system_instruction=system_instruction)
+
+    try:
+        response = gemini_client.models.generate_content(model=active_model, contents=contents, config=config)
+    except Exception as e:
+        print(f"Document generation error: {repr(e)}")
+        raise HTTPException(status_code=502, detail="The AI service is temporarily unavailable. Please try again.")
+
+    document = (response.text or "").strip()
+    if not document:
+        raise HTTPException(status_code=502, detail="Could not generate the document. Please try again.")
+
+    # --- Deduct token cost (same rates as chat); free for subscribers ---
+    try:
+        usage = getattr(response, "usage_metadata", None)
+        if usage:
+            p_tokens = usage.prompt_token_count or 0
+            c_tokens = usage.candidates_token_count or 0
+            in_rate = db.query(Setting).filter(Setting.key == "cost_input_1m").first()
+            out_rate = db.query(Setting).filter(Setting.key == "cost_output_1m").first()
+            rate_in = float(in_rate.value) if in_rate else 240.0
+            rate_out = float(out_rate.value) if out_rate else 1440.0
+            total_cost = (p_tokens / 1_000_000) * rate_in + (c_tokens / 1_000_000) * rate_out
+            db.refresh(current_user)
+            if not has_subscription:
+                current_user.balance = max(0.0, (current_user.balance or 0) - total_cost)
+            db.add(UsageLog(user_id=current_user.id, chat_id=None, tokens_input=p_tokens,
+                            tokens_output=c_tokens, cost=total_cost, model=active_model,
+                            timestamp=datetime.utcnow(), is_subscription_covered=has_subscription))
+            db.commit()
+    except Exception as e:
+        print(f"[DOC COST] could not record cost: {e}")
+
+    return {"document": document, "balance": current_user.balance}
+
 
 # --- ADMIN ENDPOINTS ---
 
@@ -1162,7 +1300,16 @@ async def admin_delete_user(
     
     if user.is_admin:
         raise HTTPException(status_code=400, detail="Cannot delete admin user")
-    
+
+    # Remove dependent rows first — Postgres enforces foreign keys. usage_logs and
+    # payments have non-nullable user_id, so they are removed with the user.
+    user_chat_ids = [row[0] for row in db.query(Chat.id).filter(Chat.user_id == user.id).all()]
+    db.query(UsageLog).filter(UsageLog.user_id == user.id).delete(synchronize_session=False)
+    db.query(Payment).filter(Payment.user_id == user.id).delete(synchronize_session=False)
+    if user_chat_ids:
+        db.query(ChatMessage).filter(ChatMessage.chat_id.in_(user_chat_ids)).delete(synchronize_session=False)
+        db.query(Chat).filter(Chat.id.in_(user_chat_ids)).delete(synchronize_session=False)
+
     db.delete(user)
     db.commit()
     return {"message": "User deleted"}
@@ -1203,8 +1350,31 @@ async def admin_get_payments(
         "amount": p.amount,
         "tx_ref": p.tx_ref,
         "status": p.status,
+        "payment_type": p.payment_type,
+        "method": p.method or "chapa",
+        "reference": p.reference,
+        "has_receipt": bool(p.receipt_filename),
         "created_at": p.created_at.isoformat() if p.created_at else None
     } for p in payments]
+
+@app.get("/admin/payments/{payment_id}/receipt")
+async def admin_get_payment_receipt(
+    payment_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Download the receipt uploaded for a manual payment (Admin only)."""
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment or not payment.receipt_filename:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    # Resolve within the receipts dir and guard against path traversal
+    safe_name = os.path.basename(payment.receipt_filename)
+    file_path = os.path.join(RECEIPTS_DIR, safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Receipt file is missing")
+
+    return FileResponse(file_path, filename=safe_name)
 
 @app.put("/admin/payments/{payment_id}/approve")
 async def admin_approve_payment(
@@ -1219,33 +1389,13 @@ async def admin_approve_payment(
     
     if payment.status == "success":
         return {"message": "Payment already approved"}
-    
-    payment.status = "success"
-    user = db.query(User).filter(User.id == payment.user_id).first()
-    if user:
-        if payment.payment_type == "subscription_24h":
-            # Activate 24h subscription - same logic as verify_payment
-            now = datetime.utcnow()
-            start_time = now
-            if user.subscription_expires_at and user.subscription_expires_at > now:
-                start_time = user.subscription_expires_at
-            user.subscription_expires_at = start_time + timedelta(hours=24)
-            print(f"[ADMIN APPROVAL] 24h Subscription activated for user {user.username}, expires: {user.subscription_expires_at}")
-        elif payment.payment_type == "subscription_monthly":
-            # Activate monthly subscription
-            now = datetime.utcnow()
-            start_time = now
-            if user.monthly_subscription_expires_at and user.monthly_subscription_expires_at > now:
-                start_time = user.monthly_subscription_expires_at
-            user.monthly_subscription_expires_at = start_time + timedelta(days=30)
-            print(f"[ADMIN APPROVAL] Monthly Subscription activated for user {user.username}, expires: {user.monthly_subscription_expires_at}")
-        else:
-            # Regular recharge - add to balance
-            user.balance += payment.amount
-    
-    db.commit()
+
+    # Admin has reviewed the receipt — credit via the shared path (uses the
+    # amount recorded at submission time; there is no gateway amount for manual).
+    user = _apply_verified_payment(payment, db)
+
     return {
-        "message": "Payment approved", 
+        "message": "Payment approved",
         "new_balance": user.balance if user else None,
         "subscription_expires_at": (user.subscription_expires_at.isoformat() + "Z") if user and user.subscription_expires_at else None,
         "monthly_subscription_expires_at": (user.monthly_subscription_expires_at.isoformat() + "Z") if user and user.monthly_subscription_expires_at else None
@@ -1307,13 +1457,129 @@ async def admin_update_setting(
     db.commit()
     return {"message": "Setting updated", "key": key, "value": setting.value}
 
+# --- ADMIN: LEGAL LIBRARY (RAG knowledge base) ---
+
+def _serialize_provision(p: LegalProvision) -> dict:
+    return {
+        "id": p.id,
+        "law_code": p.law_code,
+        "article": p.article,
+        "title": p.title,
+        "content": p.content,
+        "language": p.language,
+        "source_url": p.source_url,
+        "is_active": p.is_active if p.is_active is not None else True,
+        "has_embedding": p.embedding is not None,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+def _embed_provision(p: LegalProvision):
+    """(Re)generate the embedding for a provision from its key fields + content."""
+    text_value = f"{p.law_code} {p.article or ''} {p.title or ''}\n{p.content}".strip()
+    p.embedding = legal_service.embed_text(text_value)
+
+
+@app.get("/admin/legal")
+async def admin_list_provisions(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """List all legal provisions (Admin only)."""
+    rows = db.query(LegalProvision).order_by(LegalProvision.id.desc()).all()
+    return [_serialize_provision(p) for p in rows]
+
+
+@app.post("/admin/legal")
+async def admin_create_provision(data: dict, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Add a verified provision to the legal library (Admin only). Embeds on save."""
+    law_code = (data.get("law_code") or "").strip()
+    content = (data.get("content") or "").strip()
+    if not law_code or not content:
+        raise HTTPException(status_code=422, detail="Law name and provision text are required.")
+
+    p = LegalProvision(
+        law_code=law_code,
+        article=(data.get("article") or "").strip() or None,
+        title=(data.get("title") or "").strip() or None,
+        content=content,
+        language=(data.get("language") or "en").strip() or "en",
+        source_url=(data.get("source_url") or "").strip() or None,
+        is_active=bool(data.get("is_active", True)),
+    )
+    try:
+        _embed_provision(p)
+    except Exception as e:
+        print(f"[LEGAL KB] embedding failed on create: {e}")
+        raise HTTPException(status_code=502, detail="Could not generate the embedding. Please try again.")
+
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _serialize_provision(p)
+
+
+@app.put("/admin/legal/{pid}")
+async def admin_update_provision(pid: int, data: dict, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Update a provision (Admin only). Re-embeds if the content/reference changed."""
+    p = db.query(LegalProvision).filter(LegalProvision.id == pid).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Provision not found")
+
+    relevant_changed = False
+    for field in ("law_code", "article", "title", "content", "language", "source_url"):
+        if field in data:
+            val = data.get(field)
+            if isinstance(val, str):
+                val = val.strip() or None
+            if field in ("law_code", "article", "title", "content") and val != getattr(p, field):
+                relevant_changed = True
+            setattr(p, field, val)
+    if "is_active" in data:
+        p.is_active = bool(data["is_active"])
+
+    if not (p.law_code or "").strip() or not (p.content or "").strip():
+        raise HTTPException(status_code=422, detail="Law name and provision text are required.")
+
+    if relevant_changed or p.embedding is None:
+        try:
+            _embed_provision(p)
+        except Exception as e:
+            print(f"[LEGAL KB] embedding failed on update: {e}")
+            raise HTTPException(status_code=502, detail="Could not regenerate the embedding. Please try again.")
+
+    db.commit()
+    db.refresh(p)
+    return _serialize_provision(p)
+
+
+@app.delete("/admin/legal/{pid}")
+async def admin_delete_provision(pid: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Delete a provision (Admin only)."""
+    p = db.query(LegalProvision).filter(LegalProvision.id == pid).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Provision not found")
+    db.delete(p)
+    db.commit()
+    return {"message": "Deleted"}
+
 # --- PUBLIC SETTINGS ENDPOINT ---
 
 @app.get("/settings/public")
 async def get_public_settings(db: Session = Depends(get_db)):
     """Get public settings (Unauthenticated)"""
     # Define which keys are safe to expose
-    public_keys = ["subscription_24h_price", "min_search_balance", "search_cost", "subscription_daily_quota", "subscription_monthly_price", "subscription_monthly_quota", "quota_reset_hours"]
+    public_keys = [
+        "subscription_24h_price", "min_search_balance", "search_cost",
+        "subscription_daily_quota", "subscription_monthly_price",
+        "subscription_monthly_quota", "quota_reset_hours",
+        # Per-option availability toggles
+        "chapa_enabled", "telebirr_enabled", "safaricom_enabled", "bank_enabled",
+        "manual_payment_instructions",
+        # Manual payment account details
+        "telebirr_number", "telebirr_name",
+        "safaricom_number", "safaricom_name",
+        "bank_name", "bank_account", "bank_holder",
+        # Contact admin channels
+        "admin_contact_phone", "admin_contact_telegram", "admin_contact_email",
+    ]
     
     settings = db.query(Setting).filter(Setting.key.in_(public_keys)).all()
     

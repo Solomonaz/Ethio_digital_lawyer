@@ -9,7 +9,7 @@
     content="EthioLex is your AI-powered Ethiopian legal assistant. Get expert guidance on Ethiopian law, legal procedures, and regulations." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com;" />
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com https://*.supabase.co wss://*.supabase.co;" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,6 +17,28 @@
     href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Ethiopic:wght@100..900&display=swap"
     rel="stylesheet">
   <style>
+    /* Accessibility: always-visible keyboard focus indicator (mouse clicks unaffected) */
+    :focus-visible {
+      outline: 2px solid #10b981;
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+    /* Skip-to-content link, revealed only on keyboard focus */
+    .skip-link {
+      position: fixed;
+      left: 12px;
+      top: -64px;
+      z-index: 1000;
+      background: #059669;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: top 0.15s ease;
+    }
+    .skip-link:focus { top: 12px; }
+
     :root {
       /* Premium Color Palette */
       --primary-emerald: #059669;
@@ -548,6 +570,7 @@
 </head>
 
 <body class="pattern-dots">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

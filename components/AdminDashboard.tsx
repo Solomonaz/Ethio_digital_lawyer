@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { API_URL } from '../constants';
 
 interface AdminUser {
     id: number;
@@ -22,6 +23,9 @@ interface AdminPayment {
     tx_ref: string;
     status: string;
     payment_type: string;
+    method?: string;
+    reference?: string;
+    has_receipt?: boolean;
     created_at: string;
 }
 
@@ -32,16 +36,36 @@ interface AdminSetting {
     description: string;
 }
 
+interface LegalProvisionRow {
+    id: number;
+    law_code: string;
+    article?: string | null;
+    title?: string | null;
+    content: string;
+    language: string;
+    source_url?: string | null;
+    is_active: boolean;
+    has_embedding: boolean;
+    created_at?: string;
+}
+
 interface AdminDashboardProps {
     onBack: () => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'settings'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'payments' | 'settings' | 'legal'>('users');
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [payments, setPayments] = useState<AdminPayment[]>([]);
     const [settings, setSettings] = useState<AdminSetting[]>([]);
+
+    // Legal Library (RAG knowledge base) state
+    const [provisions, setProvisions] = useState<LegalProvisionRow[]>([]);
+    const [savingProvision, setSavingProvision] = useState(false);
+    const [confirmDeleteProvision, setConfirmDeleteProvision] = useState<number | null>(null);
+    const emptyProvision = { law_code: '', article: '', title: '', content: '', language: 'en', source_url: '' };
+    const [newProvision, setNewProvision] = useState({ ...emptyProvision });
 
     // Model Pricing State
     const [modelName, setModelName] = useState('gemini-3-pro-preview');
@@ -53,6 +77,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const [monthlyPrice, setMonthlyPrice] = useState('500'); // Default monthly subscription price
     const [monthlyQuota, setMonthlyQuota] = useState('100'); // Default monthly subscriber daily limit
     const [quotaResetHours, setQuotaResetHours] = useState('24'); // Quota reset interval in hours
+
+    // Payment method + manual payment + contact configuration
+    const [chapaEnabled, setChapaEnabled] = useState(true);
+    const [telebirrEnabled, setTelebirrEnabled] = useState(true);
+    const [safaricomEnabled, setSafaricomEnabled] = useState(true);
+    const [bankEnabled, setBankEnabled] = useState(true);
+    const [manualInstructions, setManualInstructions] = useState('');
+    const [telebirrNumber, setTelebirrNumber] = useState('');
+    const [telebirrName, setTelebirrName] = useState('');
+    const [safaricomNumber, setSafaricomNumber] = useState('');
+    const [safaricomName, setSafaricomName] = useState('');
+    const [bankName, setBankName] = useState('');
+    const [bankAccount, setBankAccount] = useState('');
+    const [bankHolder, setBankHolder] = useState('');
+    const [adminContactPhone, setAdminContactPhone] = useState('');
+    const [adminContactTelegram, setAdminContactTelegram] = useState('');
+    const [adminContactEmail, setAdminContactEmail] = useState('');
+    const [savingPayment, setSavingPayment] = useState(false);
+    const [viewingReceipt, setViewingReceipt] = useState<number | null>(null);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -77,6 +120,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         if (activeTab === 'users') fetchUsers();
         else if (activeTab === 'payments') fetchPayments();
         else if (activeTab === 'settings') fetchSettings();
+        else if (activeTab === 'legal') fetchProvisions();
     }, [activeTab]);
 
     useEffect(() => {
@@ -90,7 +134,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://127.0.0.1:8000/admin/users', { headers });
+            const res = await fetch(`${API_URL}/admin/users`, { headers });
             if (!res.ok) throw new Error('Failed to fetch users');
             setUsers(await res.json());
         } catch (err: any) {
@@ -104,7 +148,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://127.0.0.1:8000/admin/payments', { headers });
+            const res = await fetch(`${API_URL}/admin/payments`, { headers });
             if (!res.ok) throw new Error('Failed to fetch payments');
             setPayments(await res.json());
         } catch (err: any) {
@@ -118,7 +162,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://127.0.0.1:8000/admin/settings', { headers });
+            const res = await fetch(`${API_URL}/admin/settings`, { headers });
             if (!res.ok) throw new Error('Failed to fetch settings');
             const data = await res.json();
             setSettings(data);
@@ -151,6 +195,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
             const quotaResetHoursSetting = data.find((s: AdminSetting) => s.key === 'quota_reset_hours');
             if (quotaResetHoursSetting) setQuotaResetHours(quotaResetHoursSetting.value);
+
+            // Payment method + manual payment + contact settings
+            const val = (key: string) => data.find((s: AdminSetting) => s.key === key)?.value;
+            const isTrue = (v: any) => String(v).toLowerCase() === 'true';
+            if (val('chapa_enabled') !== undefined) setChapaEnabled(isTrue(val('chapa_enabled')));
+            if (val('telebirr_enabled') !== undefined) setTelebirrEnabled(isTrue(val('telebirr_enabled')));
+            if (val('safaricom_enabled') !== undefined) setSafaricomEnabled(isTrue(val('safaricom_enabled')));
+            if (val('bank_enabled') !== undefined) setBankEnabled(isTrue(val('bank_enabled')));
+            if (val('manual_payment_instructions') !== undefined) setManualInstructions(val('manual_payment_instructions'));
+            if (val('telebirr_number') !== undefined) setTelebirrNumber(val('telebirr_number'));
+            if (val('telebirr_name') !== undefined) setTelebirrName(val('telebirr_name'));
+            if (val('safaricom_number') !== undefined) setSafaricomNumber(val('safaricom_number'));
+            if (val('safaricom_name') !== undefined) setSafaricomName(val('safaricom_name'));
+            if (val('bank_name') !== undefined) setBankName(val('bank_name'));
+            if (val('bank_account') !== undefined) setBankAccount(val('bank_account'));
+            if (val('bank_holder') !== undefined) setBankHolder(val('bank_holder'));
+            if (val('admin_contact_phone') !== undefined) setAdminContactPhone(val('admin_contact_phone'));
+            if (val('admin_contact_telegram') !== undefined) setAdminContactTelegram(val('admin_contact_telegram'));
+            if (val('admin_contact_email') !== undefined) setAdminContactEmail(val('admin_contact_email'));
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -158,9 +221,113 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         }
     };
 
+    const savePaymentSettings = async () => {
+        try {
+            setSavingPayment(true);
+            setError('');
+            const put = (key: string, value: string, description: string) =>
+                fetch(`${API_URL}/admin/settings/${key}`, {
+                    method: 'PUT', headers, body: JSON.stringify({ value, description })
+                });
+            // Run sequentially to keep it simple and reliable
+            await put('chapa_enabled', chapaEnabled ? 'true' : 'false', 'Enable the Chapa online payment option');
+            await put('telebirr_enabled', telebirrEnabled ? 'true' : 'false', 'Enable the Telebirr manual payment option');
+            await put('safaricom_enabled', safaricomEnabled ? 'true' : 'false', 'Enable the Safaricom / M-Pesa manual payment option');
+            await put('bank_enabled', bankEnabled ? 'true' : 'false', 'Enable the bank transfer manual payment option');
+            await put('manual_payment_instructions', manualInstructions, 'Instructions shown to users on the manual payment screen');
+            await put('telebirr_number', telebirrNumber, 'Telebirr account phone number for manual payments');
+            await put('telebirr_name', telebirrName, 'Telebirr account holder name');
+            await put('safaricom_number', safaricomNumber, 'Safaricom / M-Pesa account phone number for manual payments');
+            await put('safaricom_name', safaricomName, 'Safaricom / M-Pesa account holder name');
+            await put('bank_name', bankName, 'Bank name shown to users');
+            await put('bank_account', bankAccount, 'Bank account number for manual payments');
+            await put('bank_holder', bankHolder, 'Bank account holder name');
+            await put('admin_contact_phone', adminContactPhone, 'Admin phone number shown in Contact Admin');
+            await put('admin_contact_telegram', adminContactTelegram, 'Admin Telegram username or link shown in Contact Admin');
+            await put('admin_contact_email', adminContactEmail, 'Admin email address shown in Contact Admin');
+
+            setSuccess('Payment & contact settings saved successfully!');
+            fetchSettings();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSavingPayment(false);
+        }
+    };
+
+    const viewReceipt = async (paymentId: number) => {
+        setViewingReceipt(paymentId);
+        setError('');
+        try {
+            const res = await fetch(`${API_URL}/admin/payments/${paymentId}/receipt`, { headers });
+            if (!res.ok) throw new Error('Failed to load receipt');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            // Revoke shortly after so the new tab has time to load it
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setViewingReceipt(null);
+        }
+    };
+
+    // --- Legal Library (RAG knowledge base) ---
+    const fetchProvisions = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch(`${API_URL}/admin/legal`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch legal library');
+            setProvisions(await res.json());
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const addProvision = async () => {
+        if (!newProvision.law_code.trim() || !newProvision.content.trim()) {
+            setError('Law name and provision text are required.');
+            return;
+        }
+        setSavingProvision(true);
+        setError('');
+        try {
+            const res = await fetch(`${API_URL}/admin/legal`, {
+                method: 'POST', headers, body: JSON.stringify(newProvision)
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d.detail || 'Failed to add provision');
+            }
+            setSuccess('Provision added to the legal library!');
+            setNewProvision({ ...emptyProvision });
+            fetchProvisions();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSavingProvision(false);
+        }
+    };
+
+    const deleteProvision = async (id: number) => {
+        try {
+            const res = await fetch(`${API_URL}/admin/legal/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete provision');
+            setSuccess('Provision deleted.');
+            setConfirmDeleteProvision(null);
+            fetchProvisions();
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
     const updateBalance = async (userId: number, newBalance: string) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/admin/users/${userId}/balance`, {
+            const res = await fetch(`${API_URL}/admin/users/${userId}/balance`, {
                 method: 'PUT', headers, body: JSON.stringify({ balance: parseFloat(newBalance) })
             });
             if (!res.ok) throw new Error('Failed to update balance');
@@ -171,7 +338,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
     const toggleUserActive = async (userId: number) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/admin/users/${userId}/toggle-active`, {
+            const res = await fetch(`${API_URL}/admin/users/${userId}/toggle-active`, {
                 method: 'PUT', headers
             });
             if (!res.ok) throw new Error('Failed to toggle status');
@@ -183,7 +350,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
     const deleteUser = async (userId: number) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/admin/users/${userId}`, {
+            const res = await fetch(`${API_URL}/admin/users/${userId}`, {
                 method: 'DELETE', headers
             });
             if (!res.ok) throw new Error('Failed to delete user');
@@ -195,7 +362,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
     const approvePayment = async (paymentId: number) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/admin/payments/${paymentId}/approve`, { method: 'PUT', headers });
+            const res = await fetch(`${API_URL}/admin/payments/${paymentId}/approve`, { method: 'PUT', headers });
             if (!res.ok) throw new Error('Failed to approve');
             setSuccess('Payment approved!');
             fetchPayments();
@@ -204,7 +371,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
     const rejectPayment = async (paymentId: number) => {
         try {
-            const res = await fetch(`http://127.0.0.1:8000/admin/payments/${paymentId}/reject`, { method: 'PUT', headers });
+            const res = await fetch(`${API_URL}/admin/payments/${paymentId}/reject`, { method: 'PUT', headers });
             if (!res.ok) throw new Error('Failed to reject');
             setSuccess('Payment rejected!');
             fetchPayments();
@@ -215,39 +382,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         try {
             setLoading(true);
             // 1. Model Name
-            await fetch(`http://127.0.0.1:8000/admin/settings/model_name`, {
+            await fetch(`${API_URL}/admin/settings/model_name`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: modelName, description: 'Active AI Model Name' })
             });
             // 2. Input Cost
-            await fetch(`http://127.0.0.1:8000/admin/settings/cost_input_1m`, {
+            await fetch(`${API_URL}/admin/settings/cost_input_1m`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: inputCost, description: 'Cost in ETB per 1 Million Input Tokens' })
             });
             // 3. Output Cost
-            await fetch(`http://127.0.0.1:8000/admin/settings/cost_output_1m`, {
+            await fetch(`${API_URL}/admin/settings/cost_output_1m`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: outputCost, description: 'Cost in ETB per 1 Million Output Tokens' })
             });
             // 4. Min Balance
-            await fetch(`http://127.0.0.1:8000/admin/settings/min_search_balance`, {
+            await fetch(`${API_URL}/admin/settings/min_search_balance`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: minBalance, description: 'Minimum Balance Required to Search' })
             });
             // 5. Subscription Price
-            await fetch(`http://127.0.0.1:8000/admin/settings/subscription_24h_price`, {
+            await fetch(`${API_URL}/admin/settings/subscription_24h_price`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: subPrice, description: 'Price for 24-hour subscription (ETB)' })
             });
             // 6. Subscriber Daily Quota
-            await fetch(`http://127.0.0.1:8000/admin/settings/subscription_daily_quota`, {
+            await fetch(`${API_URL}/admin/settings/subscription_daily_quota`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: dailyQuota, description: 'Maximum questions per day for 24h subscribers' })
             });
             // 7. Monthly Subscription Price
-            await fetch(`http://127.0.0.1:8000/admin/settings/subscription_monthly_price`, {
+            await fetch(`${API_URL}/admin/settings/subscription_monthly_price`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: monthlyPrice, description: 'Price for monthly subscription (ETB)' })
             });
             // 8. Monthly Subscriber Daily Quota
-            await fetch(`http://127.0.0.1:8000/admin/settings/subscription_monthly_quota`, {
+            await fetch(`${API_URL}/admin/settings/subscription_monthly_quota`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: monthlyQuota, description: 'Maximum questions per day for monthly subscribers' })
             });
             // 9. Quota Reset Hours
-            await fetch(`http://127.0.0.1:8000/admin/settings/quota_reset_hours`, {
+            await fetch(`${API_URL}/admin/settings/quota_reset_hours`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: quotaResetHours, description: 'How often the question limit resets (in hours)' })
             });
 
@@ -329,7 +496,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
 
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6 border-b border-slate-200 pb-4">
-                    {[{ key: 'users', label: t('users'), icon: '👥' }, { key: 'payments', label: t('payments'), icon: '💳' }, { key: 'settings', label: t('settings'), icon: '⚙️' }].map((tab) => (
+                    {[{ key: 'users', label: t('users'), icon: '👥' }, { key: 'payments', label: t('payments'), icon: '💳' }, { key: 'legal', label: t('legalLibrary'), icon: '📚' }, { key: 'settings', label: t('settings'), icon: '⚙️' }].map((tab) => (
                         <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`px-5 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 ${activeTab === tab.key ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                             <span>{tab.icon}</span>{tab.label}
                         </button>
@@ -544,13 +711,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                         <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('username')}</th>
                                         <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('amount')}</th>
                                         <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('type')}</th>
+                                        <th className="text-left p-4 text-slate-600 font-semibold text-sm">Method</th>
                                         <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('status')}</th>
                                         <th className="text-left p-4 text-slate-600 font-semibold text-sm">{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {payments.length === 0 ? (
-                                        <tr><td colSpan={5} className="p-12 text-center text-slate-400">{t('noPayments')}</td></tr>
+                                        <tr><td colSpan={7} className="p-12 text-center text-slate-400">{t('noPayments')}</td></tr>
                                     ) : paginatedPayments.map((p) => (
                                         <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                             <td className="p-4"><div className="font-mono text-sm text-slate-700">{p.tx_ref}</div><div className="text-slate-400 text-xs">ID: {p.id}</div></td>
@@ -565,6 +733,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                         p.payment_type === 'subscription_24h' ? '⚡ 24h Pass' :
                                                             '💰 Recharge'}
                                                 </span>
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${p.method === 'manual' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
+                                                    {p.method === 'manual' ? '📱 Manual' : '💳 Chapa'}
+                                                </span>
+                                                {p.reference && (
+                                                    <div className="text-[11px] text-slate-400 mt-1 max-w-[160px] truncate" title={p.reference}>{p.reference}</div>
+                                                )}
+                                                {p.has_receipt && (
+                                                    <button
+                                                        onClick={() => viewReceipt(p.id)}
+                                                        disabled={viewingReceipt === p.id}
+                                                        className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all disabled:opacity-50"
+                                                    >
+                                                        {viewingReceipt === p.id ? (
+                                                            <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                                                        ) : (
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                        )}
+                                                        View Receipt
+                                                    </button>
+                                                )}
                                             </td>
                                             <td className="p-4">
                                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${p.status === 'success' ? 'bg-green-100 text-green-700' : p.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -649,6 +839,107 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                 </div>
                             )}
                         </>
+                    ) : activeTab === 'legal' ? (
+                        <div className="p-6 md:p-8 min-h-full">
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                {/* Add provision card */}
+                                <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                                    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-5">
+                                        <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                            <span className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">📚</span>
+                                            Legal Library
+                                        </h2>
+                                        <p className="text-slate-400 text-sm mt-1">Verified Ethiopian legal provisions the AI is allowed to cite. Answers are grounded only in what you add here — so add accurate, sourced text.</p>
+                                    </div>
+                                    <div className="p-6 space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">Law name <span className="text-red-500">*</span></label>
+                                                <input type="text" value={newProvision.law_code} onChange={(e) => setNewProvision({ ...newProvision, law_code: e.target.value })} placeholder="e.g. Labour Proclamation No. 1156/2019"
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">Article</label>
+                                                <input type="text" value={newProvision.article} onChange={(e) => setNewProvision({ ...newProvision, article: e.target.value })} placeholder="e.g. Article 35"
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div className="md:col-span-2">
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">Title / heading</label>
+                                                <input type="text" value={newProvision.title} onChange={(e) => setNewProvision({ ...newProvision, title: e.target.value })} placeholder="e.g. Period of Notice for Termination"
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">Language</label>
+                                                <select value={newProvision.language} onChange={(e) => setNewProvision({ ...newProvision, language: e.target.value })}
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all bg-white">
+                                                    <option value="en">English</option>
+                                                    <option value="am">አማርኛ</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-500 mb-1.5">Provision text <span className="text-red-500">*</span></label>
+                                            <textarea value={newProvision.content} onChange={(e) => setNewProvision({ ...newProvision, content: e.target.value })} rows={4} placeholder="Paste the exact text of the legal provision…"
+                                                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-y" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-500 mb-1.5">Source URL (verifiable link)</label>
+                                            <input type="text" value={newProvision.source_url} onChange={(e) => setNewProvision({ ...newProvision, source_url: e.target.value })} placeholder="https://…"
+                                                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <button onClick={addProvision} disabled={savingProvision}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                {savingProvision ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <span className="text-lg leading-none">＋</span>}
+                                                Add to Library
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Library list */}
+                                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-slate-100">
+                                        <h3 className="font-semibold text-slate-800">Library <span className="text-slate-400 font-normal">({provisions.length})</span></h3>
+                                    </div>
+                                    {provisions.length === 0 ? (
+                                        <div className="p-12 text-center text-slate-400 text-sm">No provisions yet. Add the first one above — the AI will start citing it.</div>
+                                    ) : (
+                                        <div className="divide-y divide-slate-100">
+                                            {provisions.map((p) => (
+                                                <div key={p.id} className="p-4 hover:bg-slate-50 transition-colors">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-sm font-bold text-slate-800">{p.law_code}</span>
+                                                                {p.article && <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">{p.article}</span>}
+                                                                <span className="text-[10px] uppercase text-slate-400 tracking-wide">{p.language}</span>
+                                                                {!p.has_embedding && <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded">no embedding</span>}
+                                                            </div>
+                                                            {p.title && <div className="text-xs text-slate-500 mt-0.5">{p.title}</div>}
+                                                            <p className="text-[13px] text-slate-600 mt-1.5 line-clamp-2">{p.content}</p>
+                                                            {p.source_url && <a href={p.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Source ↗</a>}
+                                                        </div>
+                                                        <div className="flex-shrink-0">
+                                                            {confirmDeleteProvision === p.id ? (
+                                                                <div className="flex gap-1">
+                                                                    <button onClick={() => deleteProvision(p.id)} className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-xs font-medium">{t('confirm')}</button>
+                                                                    <button onClick={() => setConfirmDeleteProvision(null)} className="px-2.5 py-1 bg-slate-200 text-slate-600 rounded-lg text-xs font-medium">{t('cancel')}</button>
+                                                                </div>
+                                                            ) : (
+                                                                <button aria-label="Delete provision" onClick={() => setConfirmDeleteProvision(p.id)} className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-medium">🗑</button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     ) : (
                         <div className="p-6 md:p-8 min-h-full">
                             {/* Single unified settings card */}
@@ -856,6 +1147,172 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                             </svg>
                                         )}
                                         Save Configuration
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* ===== Payment Methods & Contact card ===== */}
+                            <div className="max-w-4xl mx-auto mt-6 bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                                {/* Header */}
+                                <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-5">
+                                    <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                        <span className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">💳</span>
+                                        Payment Methods & Contact
+                                    </h2>
+                                    <p className="text-slate-400 text-sm mt-1">Configure manual (Telebirr / Safaricom / Bank) payments and how users reach you</p>
+                                </div>
+
+                                <div className="p-6 space-y-8">
+                                    {/* Payment options — each has its own on/off toggle */}
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-lg">🔀</span>
+                                            <h3 className="font-semibold text-slate-800">Payment Options</h3>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mb-4">Turn each option on or off. A manual option also needs its account number filled in to appear to users.</p>
+
+                                        <div className="space-y-4">
+                                            {/* Chapa */}
+                                            <div className={`rounded-xl border p-4 transition-all ${chapaEnabled ? 'border-sky-200 bg-sky-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div className="font-semibold text-slate-800 text-sm flex items-center gap-2">💳 Chapa (Online)</div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" checked={chapaEnabled} onChange={(e) => setChapaEnabled(e.target.checked)} className="sr-only peer" />
+                                                        <div className="w-11 h-6 bg-slate-300 peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                                                    </label>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Instant online card / wallet payment via the Chapa gateway.</p>
+                                            </div>
+
+                                            {/* Telebirr */}
+                                            <div className={`rounded-xl border p-4 transition-all ${telebirrEnabled ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50'}`}>
+                                                <div className="flex items-center justify-between gap-3 mb-3">
+                                                    <div className="font-semibold text-slate-800 text-sm flex items-center gap-2">📱 Telebirr</div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" checked={telebirrEnabled} onChange={(e) => setTelebirrEnabled(e.target.checked)} className="sr-only peer" />
+                                                        <div className="w-11 h-6 bg-slate-300 peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                                                    </label>
+                                                </div>
+                                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${telebirrEnabled ? '' : 'opacity-50'}`}>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Phone / Account Number</label>
+                                                        <input type="text" value={telebirrNumber} onChange={(e) => setTelebirrNumber(e.target.value)} placeholder="e.g. 0912345678"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Holder Name</label>
+                                                        <input type="text" value={telebirrName} onChange={(e) => setTelebirrName(e.target.value)} placeholder="e.g. Abebe Kebede"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Safaricom */}
+                                            <div className={`rounded-xl border p-4 transition-all ${safaricomEnabled ? 'border-orange-200 bg-orange-50/40' : 'border-slate-200 bg-slate-50'}`}>
+                                                <div className="flex items-center justify-between gap-3 mb-3">
+                                                    <div className="font-semibold text-slate-800 text-sm flex items-center gap-2">📲 Safaricom / M-Pesa</div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" checked={safaricomEnabled} onChange={(e) => setSafaricomEnabled(e.target.checked)} className="sr-only peer" />
+                                                        <div className="w-11 h-6 bg-slate-300 peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                                                    </label>
+                                                </div>
+                                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${safaricomEnabled ? '' : 'opacity-50'}`}>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Phone / Account Number</label>
+                                                        <input type="text" value={safaricomNumber} onChange={(e) => setSafaricomNumber(e.target.value)} placeholder="e.g. 0712345678"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Holder Name</label>
+                                                        <input type="text" value={safaricomName} onChange={(e) => setSafaricomName(e.target.value)} placeholder="e.g. Abebe Kebede"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Bank (editable bank name) */}
+                                            <div className={`rounded-xl border p-4 transition-all ${bankEnabled ? 'border-purple-200 bg-purple-50/40' : 'border-slate-200 bg-slate-50'}`}>
+                                                <div className="flex items-center justify-between gap-3 mb-3">
+                                                    <div className="font-semibold text-slate-800 text-sm flex items-center gap-2">🏦 Bank Transfer</div>
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" checked={bankEnabled} onChange={(e) => setBankEnabled(e.target.checked)} className="sr-only peer" />
+                                                        <div className="w-11 h-6 bg-slate-300 peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
+                                                    </label>
+                                                </div>
+                                                <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${bankEnabled ? '' : 'opacity-50'}`}>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Bank Name</label>
+                                                        <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Awash Bank"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Number</label>
+                                                        <input type="text" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="e.g. 1000123456789"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Holder Name</label>
+                                                        <input type="text" value={bankHolder} onChange={(e) => setBankHolder(e.target.value)} placeholder="e.g. Abebe Kebede"
+                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Instructions */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-800 mb-2">Instructions shown to users</label>
+                                        <textarea value={manualInstructions} onChange={(e) => setManualInstructions(e.target.value)} rows={3}
+                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
+                                            placeholder="Tell users how to pay and send you the receipt..." />
+                                    </div>
+
+                                    <div className="border-t border-slate-100"></div>
+
+                                    {/* Contact channels */}
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <span className="text-lg">📨</span>
+                                            <h3 className="font-semibold text-slate-800">Contact Admin Channels</h3>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mb-4">Shown to users in "Contact Admin" and when they submit a manual payment. Leave blank to hide.</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">📞 Phone</label>
+                                                <input type="text" value={adminContactPhone} onChange={(e) => setAdminContactPhone(e.target.value)} placeholder="e.g. 0912345678"
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">✈️ Telegram (username or link)</label>
+                                                <input type="text" value={adminContactTelegram} onChange={(e) => setAdminContactTelegram(e.target.value)} placeholder="e.g. @ethiolex or https://t.me/ethiolex"
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">✉️ Email</label>
+                                                <input type="text" value={adminContactEmail} onChange={(e) => setAdminContactEmail(e.target.value)} placeholder="e.g. support@ethiolex.com"
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Footer with Save Button */}
+                                <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 flex items-center justify-between">
+                                    <p className="text-xs text-slate-400">Users see these changes the next time they open the payment screen.</p>
+                                    <button
+                                        onClick={savePaymentSettings}
+                                        disabled={savingPayment}
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-medium text-sm transition-all shadow-lg shadow-slate-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {savingPayment ? (
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                        Save Payment & Contact
                                     </button>
                                 </div>
                             </div>

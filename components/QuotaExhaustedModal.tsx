@@ -29,7 +29,7 @@ const QuotaExhaustedModal: React.FC<QuotaExhaustedModalProps> = ({
                 <div className="relative p-8 bg-gradient-to-br from-amber-500 via-orange-500 to-red-500">
                     <div className="absolute top-0 left-0 right-0 h-1 eth-flag-stripe"></div>
 
-                    <button
+                    <button aria-label="Close"
                         onClick={onClose}
                         className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-all"
                     >

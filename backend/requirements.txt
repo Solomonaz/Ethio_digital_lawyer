@@ -11,4 +11,4 @@ python-dotenv
 requests
 slowapi
 gunicorn
-psycopg2-binary
+psycopg2-binarypgvector

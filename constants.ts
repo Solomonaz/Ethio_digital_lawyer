@@ -3,6 +3,11 @@ import { Language } from './types';
 
 export const APP_NAME = "EthioLex";
 
+// Single source of truth for the backend API base URL.
+// Defaults to the Vite dev proxy at "/api" (-> http://127.0.0.1:8000);
+// set VITE_API_URL to point at a real backend origin in production.
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 export const SYSTEM_INSTRUCTION = `You are EthioLex, a highly skilled and professional AI Digital Lawyer specialized in Ethiopian Law.
 
 **CORE DIRECTIVE**: You are a STRICTLY LEGAL AI. You must ONLY answer questions related to Ethiopian Law, legal procedures, court cases, rights, and regulations (Constitution, Criminal Code, Civil Code, Labor Proclamation, etc.).

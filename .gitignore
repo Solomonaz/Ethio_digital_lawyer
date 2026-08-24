@@ -18,6 +18,20 @@ backend/env
 backend/.env.*
 backend/.env.example
 
+# Uploaded payment receipts (user-submitted files)
+backend/uploads
+
+# Databases (never commit user data — hashes, emails, phones, balances)
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+
 
 # Editor directories and files
 .vscode/*

@@ -20,4 +20,14 @@ i18n
         }
     });
 
+// Keep <html lang> in sync with the active language so screen readers announce
+// Amharic vs English content with the correct pronunciation.
+const applyHtmlLang = (lng: string) => {
+    if (typeof document !== 'undefined') {
+        document.documentElement.lang = (lng || 'en').split('-')[0];
+    }
+};
+i18n.on('languageChanged', applyHtmlLang);
+applyHtmlLang(i18n.language);
+
 export default i18n;
