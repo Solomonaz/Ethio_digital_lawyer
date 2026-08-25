@@ -444,18 +444,18 @@ const App: React.FC = () => {
   // Loading State
   if (isAuthChecking) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900">
+      <div className="flex h-screen items-center justify-center bg-neutral-950">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <div className="w-20 h-20 flex items-center justify-center animate-pulse">
               <img src="/logo.png" alt="Logo" className="w-20 h-20 object-contain" />
             </div>
-            <div className="absolute inset-0 rounded-2xl bg-emerald-500/30 blur-xl animate-pulse"></div>
+            <div className="absolute inset-0 rounded-2xl bg-emerald-700/25 blur-2xl animate-pulse"></div>
           </div>
           <div className="flex gap-1.5">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full loading-dot"></div>
-            <div className="w-2 h-2 bg-amber-400 rounded-full loading-dot"></div>
-            <div className="w-2 h-2 bg-red-500 rounded-full loading-dot"></div>
+            <div className="w-2 h-2 bg-white/70 rounded-full loading-dot"></div>
+            <div className="w-2 h-2 bg-white/40 rounded-full loading-dot"></div>
+            <div className="w-2 h-2 bg-white/20 rounded-full loading-dot"></div>
           </div>
         </div>
       </div>
@@ -467,10 +467,10 @@ const App: React.FC = () => {
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce-in ${toast.type === 'success'
-          ? 'bg-gradient-to-r from-emerald-600 to-emerald-500'
+          ? 'bg-gradient-to-r from-emerald-700 to-emerald-600'
           : toast.type === 'error'
             ? 'bg-gradient-to-r from-red-600 to-red-500'
-            : 'bg-gradient-to-r from-slate-800 to-slate-700'
+            : 'bg-gradient-to-r from-neutral-800 to-neutral-700'
           } text-white`}>
           {toast.type === 'success' ? (
             <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
@@ -548,7 +548,7 @@ const App: React.FC = () => {
 
           {/* Delete Confirmation Modal */}
           {isClearModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/70 backdrop-blur-sm p-4 animate-fade-in">
               <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-scale-in">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center">
@@ -556,13 +556,13 @@ const App: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900">{t('clearChat')}</h3>
+                  <h3 className="text-lg font-bold text-neutral-900">{t('clearChat')}</h3>
                 </div>
-                <p className="text-slate-600 mb-6 text-sm">{t('clearChatConfirm')}</p>
+                <p className="text-neutral-600 mb-6 text-sm">{t('clearChatConfirm')}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setIsClearModalOpen(false)}
-                    className="flex-1 px-4 py-2.5 border-2 border-slate-200 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+                    className="flex-1 px-4 py-2.5 border-2 border-stone-200 rounded-xl text-neutral-700 font-medium hover:bg-stone-50 transition-colors"
                   >
                     {t('cancel')}
                   </button>
@@ -624,12 +624,12 @@ const App: React.FC = () => {
           />
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col h-full relative bg-gradient-to-br from-slate-50 via-white to-slate-50">
+          <div className="flex-1 flex flex-col h-full relative bg-gradient-to-br from-stone-50 via-white to-stone-50">
             {/* Pattern overlay */}
             <div className="absolute inset-0 pattern-grid opacity-50 pointer-events-none"></div>
 
             {/* Header */}
-            <header className="relative bg-white/80 backdrop-blur-xl h-16 flex items-center justify-between px-4 md:px-6 shadow-sm flex-shrink-0 z-10 border-b border-slate-100">
+            <header className="relative bg-white/80 backdrop-blur-xl h-16 flex items-center justify-between px-4 md:px-6 shadow-sm flex-shrink-0 z-10 border-b border-stone-100">
               {/* Ethiopian stripe accent */}
               <div className="absolute bottom-0 left-0 right-0 h-0.5 eth-flag-stripe"></div>
 
@@ -638,7 +638,7 @@ const App: React.FC = () => {
                 <button
                   aria-label={t('toggleSidebar')}
                   onClick={() => setIsSidebarOpen(true)}
-                  className="md:hidden p-2 -ml-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
+                  className="md:hidden p-2 -ml-2 rounded-xl text-stone-500 hover:text-neutral-800 hover:bg-stone-100 transition-all"
                 >
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -648,7 +648,7 @@ const App: React.FC = () => {
                 {/* Mobile Logo */}
                 <div className="flex items-center gap-2 md:hidden">
                   <img src="/logo.png" alt="Logo" className="w-9 h-9 object-contain" />
-                  <span className="font-bold text-slate-900" style={{ fontFamily: "'Playfair Display', serif" }}>EthioLex</span>
+                  <span className="font-bold text-neutral-900" style={{ fontFamily: "'Playfair Display', serif" }}>EthioLex</span>
                 </div>
 
                 {/* Desktop Tagline */}
@@ -663,8 +663,8 @@ const App: React.FC = () => {
                   <button
                     onClick={() => setShowAdminDashboard(!showAdminDashboard)}
                     className={`hidden sm:flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition-all ${showAdminDashboard
-                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-emerald-800 text-white'
+                      : 'bg-stone-100 text-neutral-700 hover:bg-stone-200'
                       }`}
                   >
                     {showAdminDashboard ? (
@@ -687,12 +687,12 @@ const App: React.FC = () => {
                 )}
 
                 {/* Language Toggle */}
-                <div className="flex bg-slate-100 p-1 rounded-xl">
+                <div className="flex bg-stone-100 p-1 rounded-xl">
                   <button
                     onClick={() => i18n.changeLanguage('en')}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${i18n.language === 'en'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white text-neutral-900 shadow-sm'
+                      : 'text-stone-500 hover:text-neutral-700'
                       }`}
                   >
                     English
@@ -700,8 +700,8 @@ const App: React.FC = () => {
                   <button
                     onClick={() => i18n.changeLanguage('am')}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${i18n.language === 'am'
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
+                      ? 'bg-white text-neutral-900 shadow-sm'
+                      : 'text-stone-500 hover:text-neutral-700'
                       }`}
                   >
                     አማርኛ
@@ -724,10 +724,10 @@ const App: React.FC = () => {
                       <div className="mb-6">
                         <img src="/logo.png" alt="Logo" className="w-24 h-24 object-contain" />
                       </div>
-                      <h2 className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
+                      <h2 className="text-2xl font-bold text-neutral-900 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
                         {t('welcomeTitle')}
                       </h2>
-                      <p className="text-slate-500 max-w-md text-sm">
+                      <p className="text-stone-500 max-w-md text-sm">
                         {t('welcomeText')}
                       </p>
                     </div>
@@ -742,21 +742,17 @@ const App: React.FC = () => {
                   {isLoading && (
                     <div className="flex w-full mb-6 justify-start animate-fade-in">
                       <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center overflow-hidden shadow-lg">
-                          <div className="w-full h-full flex flex-col">
-                            <div className="flex-1 bg-emerald-500"></div>
-                            <div className="flex-1 bg-amber-400"></div>
-                            <div className="flex-1 bg-red-500"></div>
-                          </div>
+                        <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-white border border-stone-200 flex items-center justify-center shadow-sm">
+                          <img src="/logo.png" alt="" className="w-7 h-7 object-contain" />
                         </div>
-                        <div className="bg-white border border-slate-100 px-5 py-4 rounded-2xl rounded-tl-sm shadow-lg">
+                        <div className="bg-white border border-stone-100 px-5 py-4 rounded-2xl rounded-tl-sm shadow-lg">
                           <div className="flex items-center gap-3">
                             <div className="flex gap-1">
-                              <div className="w-2 h-2 bg-emerald-500 rounded-full loading-dot"></div>
-                              <div className="w-2 h-2 bg-amber-400 rounded-full loading-dot"></div>
-                              <div className="w-2 h-2 bg-red-500 rounded-full loading-dot"></div>
+                              <div className="w-2 h-2 bg-emerald-800 rounded-full loading-dot"></div>
+                              <div className="w-2 h-2 bg-emerald-800/50 rounded-full loading-dot"></div>
+                              <div className="w-2 h-2 bg-emerald-800/25 rounded-full loading-dot"></div>
                             </div>
-                            <span className="text-xs text-slate-400 font-medium">{t('consulting')}</span>
+                            <span className="text-xs text-neutral-400 font-medium">{t('consulting')}</span>
                           </div>
                         </div>
                       </div>
@@ -769,11 +765,11 @@ const App: React.FC = () => {
             </main>
 
             {/* Input Area */}
-            <div className="relative bg-white/80 backdrop-blur-xl border-t border-slate-100 p-4 md:p-6 flex-shrink-0">
+            <div className="relative bg-white/80 backdrop-blur-xl border-t border-stone-100 p-4 md:p-6 flex-shrink-0">
               <div className="max-w-3xl mx-auto">
                 {/* Answer Perspective / Court Mode selector */}
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-0.5">{t('answerMode')}</span>
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mr-0.5">{t('answerMode')}</span>
                   <div className="inline-flex flex-wrap gap-1.5">
                     {([
                       { id: 'neutral', icon: '⚖️', label: t('modeNeutral') },
@@ -787,8 +783,8 @@ const App: React.FC = () => {
                         aria-pressed={perspective === m.id}
                         title={t(m.id === 'neutral' ? 'modeNeutralDesc' : m.id === 'lawyer' ? 'modeLawyerDesc' : 'modeClaimantDesc')}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${perspective === m.id
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/20'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'
+                          ? 'bg-emerald-800 text-white border-emerald-800'
+                          : 'bg-white text-neutral-600 border-stone-200 hover:border-emerald-300 hover:text-emerald-700'
                           }`}
                       >
                         <span aria-hidden="true">{m.icon}</span>{m.label}
@@ -796,7 +792,7 @@ const App: React.FC = () => {
                     ))}
                   </div>
                   {perspective !== 'neutral' && (
-                    <span className="text-[11px] text-slate-400 w-full sm:w-auto sm:ml-1">
+                    <span className="text-[11px] text-neutral-400 w-full sm:w-auto sm:ml-1">
                       {t(perspective === 'lawyer' ? 'modeLawyerDesc' : 'modeClaimantDesc')}
                     </span>
                   )}
@@ -808,15 +804,15 @@ const App: React.FC = () => {
                     {attachments.map((att, index) => (
                       <div key={index} className="relative group flex-shrink-0 animate-scale-in">
                         {att.type === 'image' ? (
-                          <div className="relative overflow-hidden rounded-xl border border-slate-200 shadow-md">
+                          <div className="relative overflow-hidden rounded-xl border border-stone-200 shadow-md">
                             <img src={`data:${att.mimeType};base64,${att.data}`} className="h-20 w-20 object-cover" alt="Preview" />
                           </div>
                         ) : (
-                          <div className="h-20 w-20 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200 flex flex-col items-center justify-center px-2 shadow-md">
-                            <svg className="w-6 h-6 text-amber-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <div className="h-20 w-20 bg-gradient-to-br from-stone-50 to-stone-100 rounded-xl border border-stone-200 flex flex-col items-center justify-center px-2 shadow-md">
+                            <svg className="w-6 h-6 text-neutral-500 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            <span className="text-[10px] text-slate-500 truncate w-full text-center font-medium">{att.name}</span>
+                            <span className="text-[10px] text-stone-500 truncate w-full text-center font-medium">{att.name}</span>
                           </div>
                         )}
                         <button aria-label="Close"
@@ -861,14 +857,14 @@ const App: React.FC = () => {
                 {/* Input Container */}
                 <div className={`relative flex items-end gap-2 bg-white border-2 rounded-2xl p-2 transition-all shadow-lg ${isRecording
                   ? 'border-red-300 ring-4 ring-red-100'
-                  : 'border-slate-200 focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-100'
+                  : 'border-stone-200 focus-within:border-emerald-700 focus-within:ring-4 focus-within:ring-emerald-800/10'
                   } ${currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree ? 'opacity-50 pointer-events-none' : ''}`}>
 
                   {/* Attachment Button */}
                   <button
                     aria-label={t('uploadFile')}
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-3 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all disabled:opacity-50"
+                    className="p-3 rounded-xl text-neutral-400 hover:text-emerald-800 hover:bg-emerald-50 transition-all disabled:opacity-50"
                     disabled={isRecording || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -882,7 +878,7 @@ const App: React.FC = () => {
                     onClick={isRecording ? stopListening : startListening}
                     className={`p-3 rounded-xl transition-all ${isRecording
                       ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
-                      : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                      : 'text-neutral-400 hover:text-emerald-800 hover:bg-emerald-50'
                       }`}
                     disabled={currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree}
                   >
@@ -910,7 +906,7 @@ const App: React.FC = () => {
                           ? t('listening')
                           : t('inputPlaceholder')
                     }
-                    className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-3 px-2 text-slate-800 placeholder-slate-400 text-sm outline-none"
+                    className="flex-1 bg-transparent border-none focus:ring-0 resize-none max-h-32 min-h-[44px] py-3 px-2 text-neutral-800 placeholder-neutral-400 text-sm outline-none"
                     rows={1}
                     disabled={isLoading || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
                   />
@@ -921,8 +917,8 @@ const App: React.FC = () => {
                     onClick={() => handleSendMessage()}
                     disabled={isLoading || (!input.trim() && attachments.length === 0) || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)}
                     className={`p-3 rounded-xl transition-all ${isLoading || (!input.trim() && attachments.length === 0) || (currentUser && !hasActiveSubscription && (currentUser.balance || 0) < minRequiredBalance && !sessionIsFree)
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:from-emerald-500 hover:to-emerald-400'
+                      ? 'bg-stone-100 text-neutral-400 cursor-not-allowed'
+                      : 'bg-emerald-800 text-white shadow-md hover:bg-emerald-700'
                       }`}
                   >
                     <svg className="w-5 h-5 transform rotate-90" fill="currentColor" viewBox="0 0 20 20">
@@ -932,8 +928,8 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Disclaimer */}
-                <p className="text-center text-[10px] text-slate-400 mt-3">
-                  <span className="text-red-400 font-medium">{t('disclaimerText').split('.')[0]}.</span>
+                <p className="text-center text-[10px] text-neutral-400 mt-3">
+                  <span className="text-neutral-400 font-medium">{t('disclaimerText').split('.')[0]}.</span>
                 </p>
               </div>
             </div>

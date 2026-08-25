@@ -40,19 +40,19 @@
     .skip-link:focus { top: 12px; }
 
     :root {
-      /* Premium Color Palette */
-      --primary-emerald: #059669;
-      --primary-emerald-light: #10b981;
-      --primary-emerald-dark: #047857;
-      --accent-gold: #d97706;
-      --accent-gold-light: #f59e0b;
-      --accent-amber: #fbbf24;
-      --deep-navy: #0f172a;
-      --slate-900: #1e293b;
-      --slate-800: #334155;
-      --slate-700: #475569;
+      /* Ink, Ivory & Forest — a modern-classic palette */
+      --primary-emerald: #0b6b4f;
+      --primary-emerald-light: #12876a;
+      --primary-emerald-dark: #064e3b;
+      --accent-gold: #a9863f;
+      --accent-gold-light: #c2a04f;
+      --accent-amber: #c2a04f;
+      --ink-950: #0b0c0e;
+      --ink-900: #131417;
+      --ink-800: #1c1e22;
+      --paper: #f7f6f3;
       --glass-white: rgba(255, 255, 255, 0.95);
-      --glass-dark: rgba(15, 23, 42, 0.85);
+      --glass-dark: rgba(11, 12, 14, 0.85);
     }
 
     * {
@@ -61,7 +61,8 @@
 
     body {
       font-family: 'Inter', 'Noto Sans Ethiopic', sans-serif;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+      background: #f7f6f3;
+      color: #1c1e22;
       min-height: 100vh;
     }
 
@@ -85,24 +86,23 @@
     }
 
     ::-webkit-scrollbar-thumb {
-      background: linear-gradient(to bottom, #059669, #10b981);
+      background: #c9c6bf;
       border-radius: 10px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(to bottom, #047857, #059669);
+      background: #b0ada4;
     }
 
-    /* Ethiopian Gradient Utilities */
+    /* Brand accent utilities (single restrained forest-green, no tri-color) */
     .eth-gradient {
-      background: linear-gradient(135deg, #059669 0%, #fbbf24 50%, #dc2626 100%);
+      background: linear-gradient(135deg, #064e3b 0%, #0b6b4f 100%);
     }
 
     .eth-gradient-text {
-      background: linear-gradient(90deg, #059669, #d97706, #dc2626);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: #0b6b4f;
+      background: none;
+      -webkit-text-fill-color: currentColor;
     }
 
     .eth-gradient-border {
@@ -114,11 +114,9 @@
       border-image: linear-gradient(90deg, #059669, #fbbf24, #dc2626) 1;
     }
 
+    /* Was the tri-color flag bar — now a quiet single hairline of forest green. */
     .eth-flag-stripe {
-      background: linear-gradient(90deg,
-          #059669 0%, #059669 33.33%,
-          #fbbf24 33.33%, #fbbf24 66.66%,
-          #dc2626 66.66%, #dc2626 100%);
+      background: linear-gradient(90deg, transparent, rgba(11, 107, 79, 0.45), transparent);
     }
 
     /* Glassmorphism Effects */
@@ -350,7 +348,7 @@
 
     /* Button Styles */
     .btn-primary {
-      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      background: linear-gradient(135deg, #064e3b 0%, #0b6b4f 100%);
       color: white;
       font-weight: 600;
       padding: 14px 28px;
@@ -364,7 +362,7 @@
 
     .btn-primary:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(5, 150, 105, 0.4);
+      box-shadow: 0 10px 30px rgba(6, 78, 59, 0.32);
     }
 
     .btn-primary:active:not(:disabled) {
@@ -542,21 +540,29 @@
 
     /* Decorative Elements */
     .pattern-dots {
-      background-image: radial-gradient(rgba(5, 150, 105, 0.1) 1px, transparent 1px);
-      background-size: 20px 20px;
+      background-image: radial-gradient(rgba(28, 30, 34, 0.045) 1px, transparent 1px);
+      background-size: 22px 22px;
     }
 
     .pattern-grid {
       background-image:
-        linear-gradient(rgba(5, 150, 105, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(5, 150, 105, 0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
+        linear-gradient(rgba(28, 30, 34, 0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(28, 30, 34, 0.022) 1px, transparent 1px);
+      background-size: 44px 44px;
     }
 
     /* Collapsed sidebar rail width (desktop). Defined here as real CSS so it never
        depends on the Tailwind CDN generating responsive/arbitrary width classes. */
     @media (min-width: 768px) {
       .sidebar-rail { width: 5rem !important; }
+    }
+
+    /* Sidebar surface — a refined green-charcoal with depth and a whisper of brand
+       glow near the top, instead of a flat dead-black. Real CSS for reliable render. */
+    .sidebar-surface {
+      background:
+        radial-gradient(135% 60% at 50% -6%, rgba(16, 185, 129, 0.09), transparent 60%),
+        linear-gradient(180deg, #202824 0%, #1a211d 46%, #151b17 100%);
     }
 </style>
   <script type="importmap">
