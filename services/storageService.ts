@@ -1,4 +1,4 @@
-import { User, ChatSession, Message, Language, Attachment } from '../types';
+import { User, ChatSession, Message, Language, Attachment, Perspective } from '../types';
 import { supabase, setAuthSuppressed, isAuthSuppressed } from './supabase';
 
 // API Base URL (Relative because of Vite Proxy)
@@ -215,7 +215,8 @@ export const sendMessageToBackend = async (
     sessionId: string,
     message: string,
     language: Language,
-    attachments: Attachment[]
+    attachments: Attachment[],
+    perspective: Perspective = 'neutral'
 ): Promise<Message> => {
     try {
         const res = await fetch(`${API_URL}/chats/${sessionId}/message`, {
@@ -224,6 +225,7 @@ export const sendMessageToBackend = async (
             body: JSON.stringify({
                 message,
                 language,
+                perspective,
                 attachments: attachments.length > 0 ? attachments : null
             })
         });

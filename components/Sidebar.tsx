@@ -125,11 +125,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Container */}
       <div className={`fixed inset-y-0 left-0 z-30 flex flex-col transform transition-all duration-300 ease-out 
         md:static md:inset-auto md:transform-none
-        ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 md:translate-x-0 md:w-[72px]'}
+        ${isOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72 md:translate-x-0 sidebar-rail'}
       `}>
 
         {/* Main Sidebar Content */}
-        <div className={`flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 md:w-[72px]'}`}>
+        <div className={`flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 sidebar-rail'}`}>
 
           {/* Header */}
           <div className={`relative border-b border-slate-800/50 ${isOpen ? 'p-5' : 'p-3'}`}>
@@ -139,8 +139,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               {/* Logo */}
               <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center pt-2'}`}>
                 <div className="relative group cursor-pointer" onClick={!isOpen ? toggleSidebar : undefined}>
-                  <div className={`${isOpen ? 'w-12 h-12' : 'w-11 h-11'} rounded-xl flex items-center justify-center bg-gradient-to-br from-slate-800/50 to-slate-800/30 border border-slate-700/30 transition-all group-hover:border-emerald-500/30`}>
-                    <img src="/favicon.svg" alt="EthioLex Logo" className={`${isOpen ? 'w-8 h-8' : 'w-7 h-7'} object-contain`} />
+                  <div className={`${isOpen ? 'w-12 h-12' : 'w-11 h-11'} flex items-center justify-center transition-all group-hover:scale-105`}>
+                    <img src="/logo.png" alt="EthioLex Logo" className={`${isOpen ? 'w-12 h-12' : 'w-11 h-11'} object-contain`} />
                   </div>
                 </div>
                 {isOpen && (
@@ -159,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onClick={toggleSidebar}
                   className={`p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all border border-transparent hover:border-slate-700/50 ${!isOpen && 'mt-1'}`}
                 >
-                  <svg className={`w-5 h-5 transition-transform duration-300 ${!isOpen && 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     {isOpen ? (
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                     ) : (
@@ -172,7 +172,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* New Chat Button */}
-          <div className={`${isOpen ? 'px-4 py-4' : 'px-3 py-3 flex justify-center'}`}>
+          <div className={`${isOpen ? 'px-4 py-4' : 'px-3 py-4 flex flex-col items-center gap-2'}`}>
             <Tooltip label={t('newChat')}>
               <button
                 onClick={() => {
@@ -196,7 +196,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onOpenDocuments();
                   if (window.innerWidth < 768) toggleSidebar();
                 }}
-                className={`mt-2 group text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 border border-slate-700/60 font-medium text-sm flex items-center justify-center transition-all ${isOpen ? 'w-full py-2.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
+                className={`group text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 border border-slate-700/60 font-medium text-sm flex items-center justify-center transition-all ${isOpen ? 'mt-2 w-full py-2.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

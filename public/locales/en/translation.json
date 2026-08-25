@@ -1,5 +1,5 @@
 {
-    "appTagline": "Ethiopian Digital Lawyer",
+    "appTagline": "",
     "welcomeBack": "Welcome Back",
     "createAccount": "Create Account",
     "signInGoogle": "Sign in with Google",
@@ -143,6 +143,8 @@
     "questionsPerHours": "{{count}} questions/{{hours}}h",
     "noTokenCost": "No token cost",
     "toggleSidebar": "Toggle sidebar",
+    "collapseSidebar": "Collapse",
+    "expandSidebar": "Expand",
     "activePass": "Active Pass",
     "unlimited24h": "24H Unlimited",
     "expiresOn": "Expires on",
@@ -316,5 +318,12 @@
     "lpCtaTitle": "Ready to get clarity on Ethiopian law?",
     "lpCtaSubtitle": "Start free — no credit card required. Your first questions are on us.",
     "lpFooterDisclaimer": "EthioLex provides general legal information, not a substitute for a licensed Ethiopian attorney.",
-    "lpFooterRights": "All rights reserved."
+    "lpFooterRights": "All rights reserved.",
+    "answerMode": "Answer mode",
+    "modeNeutral": "Neutral",
+    "modeLawyer": "My lawyer",
+    "modeClaimant": "Claimant",
+    "modeNeutralDesc": "Balanced legal information",
+    "modeLawyerDesc": "Court-ready arguments to defend your position",
+    "modeClaimantDesc": "Help build a case against another party"
 }

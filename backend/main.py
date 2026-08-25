@@ -145,6 +145,89 @@ When drafting legal documents:
 
 **DISCLAIMER**: At the end of document drafts or advice, include a brief note that while this document/advice is professionally drafted based on Ethiopian law, the user should review it with a licensed attorney before official use if possible."""
 
+
+# --- Answer perspective / court mode ------------------------------------------
+# Lets a user choose the stance of the answer: a neutral explainer (default), an
+# advocate arguing THEIR side, or help building a claim against another party.
+# The client only ever selects among these fixed server-side personas — the
+# raw value is whitelisted below, so it can never inject arbitrary instructions.
+VALID_PERSPECTIVES = {"neutral", "lawyer", "claimant"}
+
+_COURT_STRUCTURE = (
+    "Structure the answer with these sections, using clear headings in the user's language:\n"
+    "1. Summary of the position\n"
+    "2. Legal basis — cite the specific Ethiopian Articles / Proclamations that apply\n"
+    "3. Main arguments\n"
+    "4. Evidence and documents to gather\n"
+    "5. Procedure — where and how to file, jurisdiction, and any time limits\n"
+    "6. Weaknesses & likely counter-arguments — how the other side may respond\n"
+    "7. Recommended next steps\n"
+)
+
+_GUARDRAILS = (
+    "STRICT RULES:\n"
+    "- Argue ONLY from the facts the user provides plus real Ethiopian law. NEVER invent, "
+    "assume, or exaggerate facts or evidence. Where a fact is missing, ask for it or mark it "
+    "as [TO BE CONFIRMED].\n"
+    "- NEVER fabricate legal citations. Only cite provisions you are certain of.\n"
+    "- Section 6 (weaknesses & counter-arguments) is MANDATORY — the user must understand the "
+    "risks and the opposing view before going to court.\n"
+    "- This is strategic legal guidance, not certified representation. Keep the reminder to "
+    "review with a licensed Ethiopian attorney.\n"
+)
+
+PERSPECTIVE_ADDENDUMS = {
+    "neutral": "",
+    "lawyer": (
+        "\n\n**ANSWER PERSPECTIVE — AS THE USER'S LAWYER (COURT-ORIENTED)**\n"
+        "The user wants you to act as THEIR advocate and prepare their position for a legal "
+        "dispute or court matter. Take the user's side and build the strongest honest case to "
+        "DEFEND and advance their position under Ethiopian law.\n"
+        + _COURT_STRUCTURE + _GUARDRAILS
+    ),
+    "claimant": (
+        "\n\n**ANSWER PERSPECTIVE — AS THE CLAIMANT / ACCUSER (COURT-ORIENTED)**\n"
+        "The user wants to bring a claim, complaint, or accusation AGAINST another party and "
+        "needs help building that case for court under Ethiopian law. Help them assemble the "
+        "strongest honest case, including the elements they must prove.\n"
+        + _COURT_STRUCTURE + _GUARDRAILS +
+        "- IMPORTANT: Only help pursue a claim based on truthful facts. Do NOT help fabricate "
+        "accusations, defame anyone, or pursue a claim you can see is baseless or abusive; if the "
+        "request looks like harassment, say so and decline that part.\n"
+    ),
+}
+
+
+# Short reinforcement appended to the user's message for partisan modes. The base
+# system prompt is large, so echoing a concise directive next to the question
+# reliably steers the model into the court structure (same technique the free-search
+# limiter already uses successfully).
+PERSPECTIVE_MESSAGE_HINTS = {
+    "neutral": "",
+    "lawyer": (
+        "\n\n[Answer this AS MY LAWYER, taking my side and preparing my position for court. "
+        "Use these headings: Summary; Legal basis (cite the Ethiopian articles/proclamations); "
+        "My arguments; Evidence to gather; Procedure & where to file; "
+        "Weaknesses & likely counter-arguments (this section is required); Next steps. "
+        "Use only the facts I gave plus real Ethiopian law — never invent facts or citations.]"
+    ),
+    "claimant": (
+        "\n\n[Help me bring a claim/accusation against the other party and build my case for court. "
+        "Use these headings: Summary; Legal basis (cite the Ethiopian articles/proclamations); "
+        "Elements I must prove; Evidence to gather; Procedure & where to file; "
+        "Weaknesses & how they may defend (this section is required); Next steps. "
+        "Use only truthful facts I gave plus real Ethiopian law — never fabricate facts, "
+        "citations, or accusations.]"
+    ),
+}
+
+
+def resolve_perspective(value: Optional[str]) -> str:
+    """Whitelist the client-supplied perspective; anything unknown → neutral."""
+    v = (value or "neutral").strip().lower()
+    return v if v in VALID_PERSPECTIVES else "neutral"
+
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 from supabase_auth import verify_supabase_token
@@ -939,12 +1022,20 @@ async def send_message(
         # Handle current message with attachments
         current_parts = []
         
+        # Answer perspective (neutral / as-my-lawyer / as-claimant). Whitelisted,
+        # so a bad value simply falls back to the neutral explainer.
+        perspective = resolve_perspective(getattr(message_data, "perspective", None))
+        perspective_instruction = PERSPECTIVE_ADDENDUMS.get(perspective, "")
+
         # Apply Free Search Limitation only if user has no balance and no subscription
         # If user has balance or subscription, give full response
         message_text = message_data.message
         if is_free_search and current_user.balance <= 0 and not has_subscription:
             message_text += "\n\nIMPORTANT: This is a free trial search. You MUST LIMIT your response. Only provide the relevant legal Article(s) and a very brief explanation. Do NOT provide a robust detailed analysis. END the response with this exact caption: '\n\n*This is a limited free search. Please recharge your account for a robust and complete response.*'"
-        
+        elif perspective != "neutral":
+            # Full answer for paying/subscribed users: reinforce the court perspective.
+            message_text += PERSPECTIVE_MESSAGE_HINTS.get(perspective, "")
+
         current_parts.append(types.Part.from_text(text=message_text))
         
         if message_data.attachments:
@@ -976,13 +1067,14 @@ async def send_message(
         # actually cited are shown (avoids clutter on general-knowledge answers).
         legal_citations = []
 
-        # Configure generation (system instruction augmented with retrieved law)
+        # Configure generation. Perspective persona goes LAST so it stays salient
+        # after the large base prompt and the retrieved-law grounding.
         generation_config = types.GenerateContentConfig(
             temperature=0.7,
             top_p=0.95,
             top_k=40,
             # max_output_tokens=2048,
-            system_instruction=SYSTEM_INSTRUCTION + grounding_instruction
+            system_instruction=SYSTEM_INSTRUCTION + grounding_instruction + perspective_instruction
         )
         
         # Send message using the new SDK

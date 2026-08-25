@@ -103,9 +103,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, initialView = 'login', o
             <div className="absolute -bottom-16 -left-16 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl"></div>
 
             <div className="relative z-10">
-              <div className="mb-8 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20">
-                <img src="/favicon.svg" alt="EthioLex Logo" className="h-9 w-9 object-contain drop-shadow-md" />
-              </div>
+              <img src="/logo.png" alt="EthioLex Logo" className="mb-8 h-16 w-16 object-contain drop-shadow-lg" />
               <h1 className="mb-2 text-3xl font-bold text-white tracking-tight font-serif">{APP_NAME}</h1>
               <p className="text-emerald-100/80 text-sm leading-relaxed">{t('securityDesc')}</p>
             </div>
@@ -139,11 +137,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, initialView = 'login', o
             {/* Mobile Header */}
             <div className="lg:hidden flex items-center justify-between p-6 pb-0">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-transparent text-slate-900 shadow-none">
-                  <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 3v13M4 7h16M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M8 21h8M12 16l-3 5h6l-3-5" />
-                  </svg>
-                </div>
+                <img src="/logo.png" alt="EthioLex Logo" className="h-12 w-12 object-contain" />
                 <div>
                   <h1 className="text-xl font-bold text-slate-900 font-serif leading-none">{APP_NAME}</h1>
                   <p className="text-[10px] text-emerald-600 font-medium">Digital Lawyer</p>

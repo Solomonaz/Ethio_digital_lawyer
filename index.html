@@ -4,10 +4,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EthioLex - Ethiopian Digital Lawyer</title>
+  <!-- <title>EthioLex - Ethiopian Digital Lawyer</title> -->
   <meta name="description"
     content="EthioLex is your AI-powered Ethiopian legal assistant. Get expert guidance on Ethiopian law, legal procedures, and regulations." />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" href="/logo.png">
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com https://*.supabase.co wss://*.supabase.co;" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -552,7 +552,13 @@
         linear-gradient(90deg, rgba(5, 150, 105, 0.03) 1px, transparent 1px);
       background-size: 40px 40px;
     }
-  </style>
+
+    /* Collapsed sidebar rail width (desktop). Defined here as real CSS so it never
+       depends on the Tailwind CDN generating responsive/arbitrary width classes. */
+    @media (min-width: 768px) {
+      .sidebar-rail { width: 5rem !important; }
+    }
+</style>
   <script type="importmap">
 {
   "imports": {

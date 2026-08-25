@@ -1,6 +1,10 @@
 
 export type Language = 'en' | 'am';
 
+// Stance of the AI answer: neutral explainer, advocate for the user, or
+// help building a claim against another party (court-oriented).
+export type Perspective = 'neutral' | 'lawyer' | 'claimant';
+
 export interface Attachment {
   type: 'image' | 'file' | 'audio';
   mimeType: string;

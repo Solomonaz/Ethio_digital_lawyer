@@ -84,10 +84,11 @@ const TEMPLATES: DocTemplate[] = [
 ];
 
 const DocumentsModal: React.FC<DocumentsModalProps> = ({ isOpen, onClose, onRecharge }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [selected, setSelected] = useState<DocTemplate | null>(null);
     const [values, setValues] = useState<Record<string, string>>({});
-    const [docLang, setDocLang] = useState<'en' | 'am'>('en');
+    // The document is generated in the app's current (global) language.
+    const docLang: 'en' | 'am' = i18n.language === 'am' ? 'am' : 'en';
     const [generating, setGenerating] = useState(false);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState('');
@@ -229,19 +230,6 @@ const DocumentsModal: React.FC<DocumentsModalProps> = ({ isOpen, onClose, onRech
 
                     {step === 'form' && selected && (
                         <div className="space-y-4">
-                            {/* Language toggle */}
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-slate-700">{t('documentLanguage')}</span>
-                                <div className="flex bg-slate-100 p-1 rounded-lg">
-                                    {(['en', 'am'] as const).map(l => (
-                                        <button key={l} onClick={() => setDocLang(l)}
-                                            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${docLang === l ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                            {l === 'en' ? 'English' : 'አማርኛ'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
                             {isCustom ? (
                                 <>
                                     <div>
