@@ -104,9 +104,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className="group/tooltip relative">
       {children}
       {!isOpen && (
-        <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-xs font-medium rounded-lg shadow-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 whitespace-nowrap z-50 border border-slate-700/50">
+        <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-neutral-900 text-white text-xs font-medium rounded-lg shadow-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 whitespace-nowrap z-50 border border-white/10">
           {label}
-          <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800"></div>
+          <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-neutral-900"></div>
         </div>
       )}
     </div>
@@ -117,7 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-20 md:hidden animate-fade-in"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 md:hidden animate-fade-in"
           onClick={toggleSidebar}
         />
       )}
@@ -129,12 +129,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       `}>
 
         {/* Main Sidebar Content */}
-        <div className={`flex-1 flex flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/50 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 sidebar-rail'}`}>
+        <div className={`flex-1 flex flex-col sidebar-surface border-r border-white/5 overflow-hidden transition-all duration-300 ${isOpen ? 'w-72' : 'w-72 sidebar-rail'}`}>
 
           {/* Header */}
-          <div className={`relative border-b border-slate-800/50 ${isOpen ? 'p-5' : 'p-3'}`}>
-            <div className="absolute top-0 left-0 right-0 h-1 eth-flag-stripe"></div>
-
+          <div className={`relative ${isOpen ? 'p-5 pb-3' : 'p-3'}`}>
             <div className={`flex items-center ${isOpen ? 'justify-between' : 'flex-col gap-3'}`}>
               {/* Logo */}
               <div className={`flex items-center ${isOpen ? 'gap-3' : 'justify-center pt-2'}`}>
@@ -148,7 +146,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <h1 className="text-lg font-bold text-white tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
                       {APP_NAME}
                     </h1>
-                    <p className="text-[10px] text-emerald-400 font-medium uppercase tracking-widest">Digital Lawyer</p>
+                    <p className="text-[10px] text-neutral-500 font-medium uppercase tracking-[0.2em]">Digital Lawyer</p>
                   </div>
                 )}
               </div>
@@ -157,7 +155,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <Tooltip label={isOpen ? t('collapseSidebar') || 'Collapse' : t('expandSidebar') || 'Expand'}>
                 <button
                   onClick={toggleSidebar}
-                  className={`p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all border border-transparent hover:border-slate-700/50 ${!isOpen && 'mt-1'}`}
+                  className={`p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10 ${!isOpen && 'mt-1'}`}
                 >
                   <svg className="w-5 h-5 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     {isOpen ? (
@@ -179,7 +177,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onNewChat();
                   if (window.innerWidth < 768) toggleSidebar();
                 }}
-                className={`group relative overflow-hidden bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-medium text-sm flex items-center justify-center transition-all duration-300 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:-translate-y-0.5 ${isOpen ? 'w-full py-3.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
+                className={`group relative overflow-hidden bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center justify-center transition-all duration-300 shadow-lg shadow-black/30 hover:-translate-y-0.5 ${isOpen ? 'w-full py-3.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -196,7 +194,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   onOpenDocuments();
                   if (window.innerWidth < 768) toggleSidebar();
                 }}
-                className={`group text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 border border-slate-700/60 font-medium text-sm flex items-center justify-center transition-all ${isOpen ? 'mt-2 w-full py-2.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
+                className={`group text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 font-medium text-sm flex items-center justify-center transition-all ${isOpen ? 'mt-2 w-full py-2.5 px-4 gap-2 rounded-xl' : 'w-11 h-11 p-0 rounded-xl'}`}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -209,7 +207,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Divider for collapsed state */}
           {!isOpen && sessionGroups.length > 0 && (
             <div className="px-3 py-1">
-              <div className="h-px bg-gradient-to-r from-transparent via-slate-700/60 to-transparent"></div>
+              <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
             </div>
           )}
 
@@ -224,8 +222,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                       if (window.innerWidth < 768) toggleSidebar();
                     }}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0 ${currentSessionId === session.id
-                      ? 'bg-slate-800 border-l-2 border-l-emerald-500 border-y border-r border-y-slate-700/50 border-r-slate-700/50 text-emerald-400'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-white border border-transparent hover:border-slate-700/50'
+                      ? 'bg-white/10 border-l-2 border-l-emerald-500 text-emerald-300'
+                      : 'text-neutral-400 hover:bg-white/5 hover:text-white border border-transparent'
                       }`}
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -238,7 +236,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <Tooltip label={`${sessionGroups.flatMap(g => g.items).length - 5} more chats`}>
                   <button
                     onClick={toggleSidebar}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-all border border-dashed border-slate-700/50 hover:border-slate-600 shrink-0"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-neutral-500 hover:text-neutral-200 hover:bg-white/5 transition-all border border-dashed border-white/15 hover:border-white/25 shrink-0"
                   >
                     <span className="text-[10px] font-semibold">+{sessionGroups.flatMap(g => g.items).length - 5}</span>
                   </button>
@@ -249,20 +247,20 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex-1 overflow-y-auto px-3 pb-4 custom-scrollbar">
               {sessionGroups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
-                    <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                   </div>
-                  <p className="text-slate-500 text-sm">{t('noHistory')}</p>
-                  <p className="text-slate-600 text-xs mt-1">Start a new consultation above</p>
+                  <p className="text-neutral-400 text-sm">{t('noHistory')}</p>
+                  <p className="text-neutral-600 text-xs mt-1">Start a new consultation above</p>
                 </div>
               ) : (
                 <div className="space-y-5">
                   {sessionGroups.map((group, gIndex) => (
                     <div key={gIndex} className="animate-fade-in" style={{ animationDelay: `${gIndex * 50}ms` }}>
-                      <h3 className="px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
+                      <h3 className="px-3 py-2 text-[11px] font-semibold text-neutral-500 uppercase tracking-[0.15em] flex items-center gap-2">
+                        <span className="w-1 h-1 rounded-full bg-emerald-600"></span>
                         {group.label}
                       </h3>
                       <div className="space-y-1">
@@ -270,8 +268,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                           <div
                             key={session.id}
                             className={`group relative flex items-center rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200 ${currentSessionId === session.id
-                              ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 border border-emerald-500/20 text-white'
-                              : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                              ? 'bg-white/10 border border-white/10 text-white'
+                              : 'text-neutral-400 hover:bg-white/5 hover:text-neutral-200'
                               }`}
                             onClick={() => {
                               onSelectSession(session);
@@ -290,7 +288,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                             <button
                               onClick={(e) => onDeleteSession(session.id, e)}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -307,7 +305,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* User Footer */}
-          <div className={`border-t border-slate-800/50 bg-gradient-to-t from-slate-950 to-transparent ${isOpen ? 'p-4' : 'p-3'}`}>
+          <div className={`border-t border-white/5 bg-gradient-to-t from-black/40 to-transparent ${isOpen ? 'p-4' : 'p-3'}`}>
             {user && (
               <div className={`flex ${isOpen ? 'items-center justify-between' : 'flex-col items-center gap-2'}`}>
                 {/* User Profile with Popup Menu */}
@@ -318,14 +316,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                       onClick={() => setShowProfileMenu(!showProfileMenu)}
                     >
                       <div className="relative">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm group-hover:from-slate-600 group-hover:to-slate-500 transition-all">
+                        <div className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center text-white font-semibold text-sm group-hover:bg-neutral-700 transition-all">
                           {(user.name || user.username)?.charAt(0).toUpperCase()}
                         </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-neutral-950 rounded-full"></div>
                       </div>
                       <div className="animate-fade-in">
                         <p className="text-sm font-medium text-white truncate max-w-[100px]">{user.name || user.username}</p>
-                        <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                        <p className="text-[10px] text-neutral-500 flex items-center gap-1">
                           <span className={`w-1.5 h-1.5 rounded-full ${user.monthly_subscription_expires_at && new Date(user.monthly_subscription_expires_at) > new Date()
                             ? 'bg-purple-500'
                             : user.subscription_expires_at && new Date(user.subscription_expires_at) > new Date()
@@ -352,7 +350,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </p>
                       </div>
                       {/* Dropdown indicator */}
-                      <svg className={`w-4 h-4 text-slate-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className={`w-4 h-4 text-neutral-500 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
@@ -362,24 +360,24 @@ const Sidebar: React.FC<SidebarProps> = ({
                         onClick={() => setShowProfileMenu(!showProfileMenu)}
                         className="relative"
                       >
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center text-white font-semibold text-sm hover:from-slate-600 hover:to-slate-500 transition-all border border-slate-600/50">
+                        <div className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center text-white font-semibold text-sm hover:bg-neutral-700 transition-all border border-white/10">
                           {(user.name || user.username)?.charAt(0).toUpperCase()}
                         </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></div>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-neutral-950 rounded-full"></div>
                       </button>
                     </Tooltip>
                   )}
 
                   {/* Profile Popup Menu */}
                   {showProfileMenu && (
-                    <div className={`absolute ${isOpen ? 'bottom-full left-0 mb-2 w-48' : 'left-full bottom-0 ml-2 w-44'} bg-slate-800 rounded-xl shadow-xl border border-slate-700/50 py-1.5 z-50 animate-fade-in`}>
+                    <div className={`absolute ${isOpen ? 'bottom-full left-0 mb-2 w-48' : 'left-full bottom-0 ml-2 w-44'} bg-neutral-900 rounded-xl shadow-2xl border border-white/10 py-1.5 z-50 animate-fade-in`}>
                       {/* Arrow pointer */}
-                      <div className={`absolute ${isOpen ? 'bottom-0 left-4 translate-y-full border-t-slate-800' : 'left-0 bottom-3 -translate-x-full border-r-slate-800'} border-8 border-transparent ${isOpen ? 'border-t-slate-800' : 'border-r-slate-800'}`}></div>
+                      <div className={`absolute ${isOpen ? 'bottom-0 left-4 translate-y-full border-t-neutral-900' : 'left-0 bottom-3 -translate-x-full border-r-neutral-900'} border-8 border-transparent ${isOpen ? 'border-t-neutral-900' : 'border-r-neutral-900'}`}></div>
 
                       {/* User info header in popup */}
-                      <div className="px-3 py-2 border-b border-slate-700/50 mb-1">
+                      <div className="px-3 py-2 border-b border-white/10 mb-1">
                         <p className="text-sm font-medium text-white truncate">{user.name || user.username}</p>
-                        <p className="text-xs text-slate-400 truncate">{user.email || 'User'}</p>
+                        <p className="text-xs text-neutral-400 truncate">{user.email || 'User'}</p>
                       </div>
 
                       {/* Settings Option */}
@@ -388,7 +386,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           onOpenSettings();
                           setShowProfileMenu(false);
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-all"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -398,7 +396,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       </button>
 
                       {/* Divider */}
-                      <div className="my-1 border-t border-slate-700/50"></div>
+                      <div className="my-1 border-t border-white/10"></div>
 
                       {/* Logout Option */}
                       <button
@@ -421,7 +419,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <Tooltip label={t('addFunds') || 'Add Funds'}>
                   <button
                     onClick={onAddFunds}
-                    className={`rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all border border-transparent hover:border-amber-500/20 ${isOpen ? 'p-2.5' : 'p-2 w-10 h-10 flex items-center justify-center mt-2'}`}
+                    className={`rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10 ${isOpen ? 'p-2.5' : 'p-2 w-10 h-10 flex items-center justify-center mt-2'}`}
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
