@@ -143,6 +143,8 @@
     "questionsPerHours": "{{count}} ጥያቄ/{{hours}}ሰ",
     "noTokenCost": "ቶከን አይቀነስም",
     "toggleSidebar": "ጎን አሞሌ ቀያይር",
+    "collapseSidebar": "ጎን አሞሌ አሳንስ",
+    "expandSidebar": "ጎን አሞሌ ዘርጋ",
     "activePass": "ንቁ ፓስ",
     "unlimited24h": "ያልተገደበ 24 ሰዓት",
     "expiresOn": "የሚያበቃበት",
@@ -316,5 +318,12 @@
     "lpCtaTitle": "የኢትዮጵያን ህግ ግልጽ ለማድረግ ዝግጁ ነዎት?",
     "lpCtaSubtitle": "በነጻ ይጀምሩ — ክሬዲት ካርድ አያስፈልግም። የመጀመሪያ ጥያቄዎችዎ በኛ በኩል ነጻ ናቸው።",
     "lpFooterDisclaimer": "ኢትዮ-ሌክስ አጠቃላይ የህግ መረጃ ይሰጣል፣ ፈቃድ ያለው የኢትዮጵያ ጠበቃን አይተካም።",
-    "lpFooterRights": "መብቱ በህግ የተጠበቀ ነው።"
+    "lpFooterRights": "መብቱ በህግ የተጠበቀ ነው።",
+    "answerMode": "የመልስ ሁነታ",
+    "modeNeutral": "ገለልተኛ",
+    "modeLawyer": "የኔ ጠበቃ",
+    "modeClaimant": "ከሳሽ",
+    "modeNeutralDesc": "ሚዛናዊ የህግ መረጃ",
+    "modeLawyerDesc": "አቋምዎን ለመከላከል ለፍርድ ቤት ዝግጁ ክርክሮች",
+    "modeClaimantDesc": "በሌላ ወገን ላይ ክስ ለመመስረት እገዛ"
 }

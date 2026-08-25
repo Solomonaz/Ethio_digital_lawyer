@@ -14,7 +14,7 @@ import SettingsModal from './components/SettingsModal';
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 import QuotaExhaustedModal from './components/QuotaExhaustedModal';
 import { observeAuthState, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
-import { Message, Language, Attachment, User, ChatSession } from './types';
+import { Message, Language, Attachment, User, ChatSession, Perspective } from './types';
 import { API_URL } from './constants';
 
 const App: React.FC = () => {
@@ -27,6 +27,9 @@ const App: React.FC = () => {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
+  // Answer perspective: neutral explainer (default), advocate for the user, or
+  // help building a claim against another party. Passed per message to the backend.
+  const [perspective, setPerspective] = useState<Perspective>('neutral');
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
@@ -265,7 +268,7 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const botResponse = await sendMessageToBackend(currentSession.id, userText, i18n.language as Language, userAttachments);
+      const botResponse = await sendMessageToBackend(currentSession.id, userText, i18n.language as Language, userAttachments, perspective);
       const finalMessages = [...updatedMessages, botResponse];
       setMessages(finalMessages);
       const updatedSessions = await getUserSessions(currentUser.id);
@@ -444,10 +447,8 @@ const App: React.FC = () => {
       <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-pulse">
-              <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8" stroke="white" strokeWidth="1.5">
-                <path d="M12 3v13M4 7h16M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M8 21h8M12 16l-3 5h6l-3-5" />
-              </svg>
+            <div className="w-20 h-20 flex items-center justify-center animate-pulse">
+              <img src="/logo.png" alt="Logo" className="w-20 h-20 object-contain" />
             </div>
             <div className="absolute inset-0 rounded-2xl bg-emerald-500/30 blur-xl animate-pulse"></div>
           </div>
@@ -646,11 +647,7 @@ const App: React.FC = () => {
 
                 {/* Mobile Logo */}
                 <div className="flex items-center gap-2 md:hidden">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md">
-                    <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4" stroke="white" strokeWidth="1.5">
-                      <path d="M12 3v13M4 7h16M8 21h8M12 16l-3 5h6l-3-5" />
-                    </svg>
-                  </div>
+                  <img src="/logo.png" alt="Logo" className="w-9 h-9 object-contain" />
                   <span className="font-bold text-slate-900" style={{ fontFamily: "'Playfair Display', serif" }}>EthioLex</span>
                 </div>
 
@@ -724,13 +721,8 @@ const App: React.FC = () => {
                   {/* Welcome State */}
                   {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
-                      <div className="relative mb-6">
-                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-2xl shadow-emerald-500/30">
-                          <svg viewBox="0 0 24 24" fill="none" className="w-10 h-10" stroke="white" strokeWidth="1.5">
-                            <path d="M12 3v13M4 7h16M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M8 21h8M12 16l-3 5h6l-3-5" />
-                          </svg>
-                        </div>
-                        <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-2xl"></div>
+                      <div className="mb-6">
+                        <img src="/logo.png" alt="Logo" className="w-24 h-24 object-contain" />
                       </div>
                       <h2 className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
                         {t('welcomeTitle')}
@@ -779,6 +771,37 @@ const App: React.FC = () => {
             {/* Input Area */}
             <div className="relative bg-white/80 backdrop-blur-xl border-t border-slate-100 p-4 md:p-6 flex-shrink-0">
               <div className="max-w-3xl mx-auto">
+                {/* Answer Perspective / Court Mode selector */}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-0.5">{t('answerMode')}</span>
+                  <div className="inline-flex flex-wrap gap-1.5">
+                    {([
+                      { id: 'neutral', icon: '⚖️', label: t('modeNeutral') },
+                      { id: 'lawyer', icon: '🛡️', label: t('modeLawyer') },
+                      { id: 'claimant', icon: '📣', label: t('modeClaimant') },
+                    ] as { id: Perspective; icon: string; label: string }[]).map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setPerspective(m.id)}
+                        aria-pressed={perspective === m.id}
+                        title={t(m.id === 'neutral' ? 'modeNeutralDesc' : m.id === 'lawyer' ? 'modeLawyerDesc' : 'modeClaimantDesc')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${perspective === m.id
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/20'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'
+                          }`}
+                      >
+                        <span aria-hidden="true">{m.icon}</span>{m.label}
+                      </button>
+                    ))}
+                  </div>
+                  {perspective !== 'neutral' && (
+                    <span className="text-[11px] text-slate-400 w-full sm:w-auto sm:ml-1">
+                      {t(perspective === 'lawyer' ? 'modeLawyerDesc' : 'modeClaimantDesc')}
+                    </span>
+                  )}
+                </div>
+
                 {/* Attachments Preview */}
                 {attachments.length > 0 && (
                   <div className="flex gap-3 mb-4 overflow-x-auto py-2">

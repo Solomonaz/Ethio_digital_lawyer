@@ -7,11 +7,9 @@ interface LandingPageProps {
     onLogin: () => void;
 }
 
-// Scales-of-justice mark used across the app.
+// Brand logo mark used across the app.
 const Logo: React.FC<{ className?: string }> = ({ className }) => (
-    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 3v13M4 7h16M5 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M15 7v4c0 2.2 1.8 4 4 4s4-1.8 4-4V7M8 21h8M12 16l-3 5h6l-3-5" />
-    </svg>
+    <img src="/logo.png" alt="Logo" className={`object-contain ${className || ''}`} />
 );
 
 const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
@@ -53,9 +51,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
                 <div className="absolute bottom-0 inset-x-0 h-0.5 eth-flag-stripe" />
                 <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/30">
-                            <Logo className="w-5 h-5 text-white" />
-                        </span>
+                        <Logo className="w-10 h-10" />
                         <span className="text-lg font-bold text-slate-900" style={{ fontFamily: "'Playfair Display', serif" }}>{APP_NAME}</span>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3">
@@ -213,9 +209,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
             <footer className="bg-slate-900 text-slate-400">
                 <div className="max-w-6xl mx-auto px-5 py-10 flex flex-col sm:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2.5">
-                        <span className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                            <Logo className="w-5 h-5 text-white" />
-                        </span>
+                        <Logo className="w-10 h-10" />
                         <div>
                             <div className="text-white font-bold text-sm" style={{ fontFamily: "'Playfair Display', serif" }}>{APP_NAME}</div>
                             <div className="text-[11px] text-slate-500">{t('appTagline')}</div>

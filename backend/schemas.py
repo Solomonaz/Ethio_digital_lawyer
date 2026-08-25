@@ -72,6 +72,9 @@ class SendMessageRequest(BaseModel):
     message: str
     language: str
     attachments: Optional[List[Dict[str, Any]]] = None
+    # Answer stance: "neutral" (default), "lawyer" (advocate for the user),
+    # or "claimant" (help build a claim against another party). Validated server-side.
+    perspective: Optional[str] = None
 
 class GroundingSource(BaseModel):
     title: Optional[str] = None
