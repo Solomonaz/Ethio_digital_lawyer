@@ -1,5 +1,4 @@
 {
-  "$comment": "Frontend (Vite) on Vercel. /api/* is proxied to the FastAPI backend on Render. Replace the onrender.com host below with YOUR backend URL after you deploy it to Render.",
   "rewrites": [
     {
       "source": "/api/(.*)",
