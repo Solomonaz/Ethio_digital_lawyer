@@ -88,9 +88,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const [telebirrName, setTelebirrName] = useState('');
     const [safaricomNumber, setSafaricomNumber] = useState('');
     const [safaricomName, setSafaricomName] = useState('');
-    const [bankName, setBankName] = useState('');
-    const [bankAccount, setBankAccount] = useState('');
-    const [bankHolder, setBankHolder] = useState('');
+    // Banks are a list — the admin can add as many as they like.
+    const [bankAccounts, setBankAccounts] = useState<Array<{ label: string; number: string; holder: string }>>([]);
     const [adminContactPhone, setAdminContactPhone] = useState('');
     const [adminContactTelegram, setAdminContactTelegram] = useState('');
     const [adminContactEmail, setAdminContactEmail] = useState('');
@@ -208,9 +207,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             if (val('telebirr_name') !== undefined) setTelebirrName(val('telebirr_name'));
             if (val('safaricom_number') !== undefined) setSafaricomNumber(val('safaricom_number'));
             if (val('safaricom_name') !== undefined) setSafaricomName(val('safaricom_name'));
-            if (val('bank_name') !== undefined) setBankName(val('bank_name'));
-            if (val('bank_account') !== undefined) setBankAccount(val('bank_account'));
-            if (val('bank_holder') !== undefined) setBankHolder(val('bank_holder'));
+            // Banks: prefer the JSON list; fall back to the single legacy bank_* fields.
+            let banks: Array<{ label: string; number: string; holder: string }> = [];
+            try { const raw = val('bank_accounts'); if (raw) banks = JSON.parse(raw); } catch { /* malformed — use legacy */ }
+            if (!Array.isArray(banks) || banks.length === 0) {
+                if ((val('bank_account') || '').trim())
+                    banks = [{ label: val('bank_name') || '', number: val('bank_account') || '', holder: val('bank_holder') || '' }];
+            }
+            setBankAccounts(banks.map(b => ({ label: b.label || '', number: b.number || '', holder: b.holder || '' })));
             if (val('admin_contact_phone') !== undefined) setAdminContactPhone(val('admin_contact_phone'));
             if (val('admin_contact_telegram') !== undefined) setAdminContactTelegram(val('admin_contact_telegram'));
             if (val('admin_contact_email') !== undefined) setAdminContactEmail(val('admin_contact_email'));
@@ -239,9 +243,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             await put('telebirr_name', telebirrName, 'Telebirr account holder name');
             await put('safaricom_number', safaricomNumber, 'Safaricom / M-Pesa account phone number for manual payments');
             await put('safaricom_name', safaricomName, 'Safaricom / M-Pesa account holder name');
-            await put('bank_name', bankName, 'Bank name shown to users');
-            await put('bank_account', bankAccount, 'Bank account number for manual payments');
-            await put('bank_holder', bankHolder, 'Bank account holder name');
+            // Persist the bank list as JSON; drop empty rows and trim fields.
+            const cleanBanks = bankAccounts
+                .map(b => ({ label: b.label.trim(), number: b.number.trim(), holder: b.holder.trim() }))
+                .filter(b => b.number !== '');
+            await put('bank_accounts', JSON.stringify(cleanBanks), 'List of bank accounts [{label, number, holder}] shown for manual payments');
             await put('admin_contact_phone', adminContactPhone, 'Admin phone number shown in Contact Admin');
             await put('admin_contact_telegram', adminContactTelegram, 'Admin Telegram username or link shown in Contact Admin');
             await put('admin_contact_email', adminContactEmail, 'Admin email address shown in Contact Admin');
@@ -1239,22 +1245,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                         <div className="w-11 h-6 bg-slate-300 peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5"></div>
                                                     </label>
                                                 </div>
-                                                <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${bankEnabled ? '' : 'opacity-50'}`}>
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Bank Name</label>
-                                                        <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Awash Bank"
-                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Number</label>
-                                                        <input type="text" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="e.g. 1000123456789"
-                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Holder Name</label>
-                                                        <input type="text" value={bankHolder} onChange={(e) => setBankHolder(e.target.value)} placeholder="e.g. Abebe Kebede"
-                                                            className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
-                                                    </div>
+                                                <p className="text-xs text-slate-400 mb-3">Add one row per bank account. Users pick which one to pay to; only the selected account's details show on their screen, so the list never crowds the checkout.</p>
+                                                <div className={`space-y-3 ${bankEnabled ? '' : 'opacity-50'}`}>
+                                                    {bankAccounts.length === 0 && (
+                                                        <p className="text-xs text-slate-400 italic">No bank accounts yet — add one below.</p>
+                                                    )}
+                                                    {bankAccounts.map((b, idx) => (
+                                                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <span className="text-xs font-semibold text-slate-500">Bank #{idx + 1}</span>
+                                                                <button type="button" onClick={() => setBankAccounts(prev => prev.filter((_, i) => i !== idx))}
+                                                                    className="text-xs font-semibold text-red-500 hover:text-red-600 inline-flex items-center gap-1">
+                                                                    🗑 Remove
+                                                                </button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Bank Name</label>
+                                                                    <input type="text" value={b.label} onChange={(e) => setBankAccounts(prev => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))} placeholder="e.g. Commercial Bank of Ethiopia"
+                                                                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Number</label>
+                                                                    <input type="text" value={b.number} onChange={(e) => setBankAccounts(prev => prev.map((x, i) => i === idx ? { ...x, number: e.target.value } : x))} placeholder="e.g. 1000123456789"
+                                                                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Holder Name</label>
+                                                                    <input type="text" value={b.holder} onChange={(e) => setBankAccounts(prev => prev.map((x, i) => i === idx ? { ...x, holder: e.target.value } : x))} placeholder="e.g. Abebe Kebede"
+                                                                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    <button type="button" onClick={() => setBankAccounts(prev => [...prev, { label: '', number: '', holder: '' }])}
+                                                        className="w-full border-2 border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 rounded-lg py-2.5 text-sm font-semibold transition-all">
+                                                        + Add bank account
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
