@@ -1,5 +1,5 @@
 import { User, ChatSession, Message, Language, Attachment, Perspective } from '../types';
-import { supabase, setAuthSuppressed, isAuthSuppressed } from './supabase';
+import { supabase, setAuthSuppressed, isAuthSuppressed, setRecoveryMode, isRecoveryMode } from './supabase';
 
 // API Base URL (Relative because of Vite Proxy)
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -79,10 +79,57 @@ export const logoutUser = async (): Promise<void> => {
     localStorage.removeItem('token');
 };
 
+// --- PASSWORD RESET (Supabase) ---
+
+// Sends a password-reset email. The link returns the user to the app with a
+// recovery token, which Supabase turns into a temporary recovery session and
+// signals with the PASSWORD_RECOVERY auth event (see observePasswordRecovery).
+export const requestPasswordReset = async (email: string): Promise<void> => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // Return to the app itself; the recovery token rides in the URL and is
+        // consumed automatically (detectSessionInUrl) to open the reset screen.
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+    });
+    if (error) throw new Error(error.message);
+};
+
+// Sets a new password for the user in the active recovery session.
+export const updatePassword = async (newPassword: string): Promise<void> => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+};
+
+// Notifies the app when the user has arrived via a password-reset link, so it
+// can show the "set a new password" screen. Fires on the PASSWORD_RECOVERY
+// event, and immediately if the recovery link was already detected in the URL
+// (the synchronous check in supabase.ts) before this listener was attached.
+export const observePasswordRecovery = (callback: () => void) => {
+    if (isRecoveryMode()) callback();
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+            setRecoveryMode(true);
+            callback();
+        }
+    });
+    return () => sub.subscription.unsubscribe();
+};
+
+// Ends the recovery flow after the password was updated and signs out, so the
+// user logs in fresh with their new password (mirrors the sign-up convention).
+export const finishPasswordRecovery = async (): Promise<void> => {
+    setRecoveryMode(false);
+    await supabase.auth.signOut();
+    localStorage.removeItem('token');
+};
+
 export const observeAuthState = (callback: (user: User | null) => void) => {
     const handle = async (accessToken: string | undefined) => {
         // Ignore transient auth events while signing up (create-then-signout).
         if (isAuthSuppressed()) return;
+        // During password recovery the session belongs to the reset flow, not a
+        // real login — report "logged out" so the app shows the reset screen
+        // (and still clears the auth-checking spinner) rather than the dashboard.
+        if (isRecoveryMode()) { callback(null); return; }
         if (accessToken) {
             localStorage.setItem('token', accessToken);
             try {
