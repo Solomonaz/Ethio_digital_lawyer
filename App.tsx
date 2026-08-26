@@ -37,7 +37,10 @@ const App: React.FC = () => {
   // help building a claim against another party. Passed per message to the backend.
   const [perspective, setPerspective] = useState<Perspective>('neutral');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Open by default on desktop, closed on mobile (matches Tailwind's md breakpoint).
+  const [isSidebarOpen, setIsSidebarOpen] = useState(
+    typeof window === 'undefined' ? true : window.innerWidth >= 768
+  );
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isContactAdminOpen, setIsContactAdminOpen] = useState(false);
