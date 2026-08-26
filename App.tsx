@@ -13,7 +13,7 @@ import SettingsModal from './components/SettingsModal';
 // Code-split: the admin dashboard is only loaded for admins, not in the initial bundle.
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 import QuotaExhaustedModal from './components/QuotaExhaustedModal';
-import { observeAuthState, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
+import { observeAuthState, observePasswordRecovery, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
 import { Message, Language, Attachment, User, ChatSession, Perspective } from './types';
 import { API_URL } from './constants';
 
@@ -24,6 +24,12 @@ const App: React.FC = () => {
   // Landing → auth flow for logged-out visitors: null shows the landing page,
   // 'login'/'signup' opens the auth screen on that tab.
   const [authMode, setAuthMode] = useState<null | 'login' | 'signup'>(null);
+  // True when the user arrived via a password-reset link — shows the "set a new
+  // password" screen instead of the landing page. Seeded synchronously from the
+  // URL hash (implicit flow returns #...type=recovery) to avoid any flash.
+  const [recoveryMode, setRecoveryMode] = useState<boolean>(
+    typeof window !== 'undefined' && window.location.hash.includes('type=recovery')
+  );
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [input, setInput] = useState('');
@@ -142,6 +148,16 @@ const App: React.FC = () => {
         setMessages([]);
         setShowAdminDashboard(false);
       }
+      setIsAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Password-reset (recovery) link handling: when the user returns from the
+  // reset email, show the "set a new password" screen instead of logging in.
+  useEffect(() => {
+    const unsubscribe = observePasswordRecovery(() => {
+      setRecoveryMode(true);
       setIsAuthChecking(false);
     });
     return () => unsubscribe();
@@ -498,7 +514,7 @@ const App: React.FC = () => {
       )}
 
       {!currentUser && (
-        authMode === null ? (
+        (authMode === null && !recoveryMode) ? (
           <LandingPage
             onGetStarted={() => setAuthMode('signup')}
             onLogin={() => setAuthMode('login')}
@@ -506,8 +522,14 @@ const App: React.FC = () => {
         ) : (
           <AuthModal
             onLogin={handleLogin}
-            initialView={authMode}
-            onBack={() => setAuthMode(null)}
+            initialView={recoveryMode ? 'reset' : (authMode || 'login')}
+            onBack={recoveryMode ? undefined : () => setAuthMode(null)}
+            onRecoveryComplete={() => {
+              setRecoveryMode(false);
+              setAuthMode('login');
+              // Strip the recovery token from the URL so a refresh doesn't re-open the reset screen.
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }}
           />
         )
       )}
