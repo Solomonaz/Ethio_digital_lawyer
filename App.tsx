@@ -74,11 +74,25 @@ const App: React.FC = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  // Id of the user whose data we've already loaded. Guards the auth listener so
+  // the one-time load doesn't re-run on every repeated Supabase auth event.
+  const loadedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = observeAuthState((user) => {
       setCurrentUser(user);
       if (user) {
+        // Supabase re-fires SIGNED_IN on every tab/window focus and fires
+        // TOKEN_REFRESHED on a timer (and getSession + INITIAL_SESSION both fire
+        // on mount). Without this guard, each event re-ran loadUserData — which
+        // resets the session list, jumps back to the first chat, and flashes the
+        // loading spinner — so the app appeared to "repeatedly refresh". Only run
+        // the one-time load when the signed-in user actually changes.
+        if (loadedUserIdRef.current === user.id) {
+          setIsAuthChecking(false);
+          return;
+        }
+        loadedUserIdRef.current = user.id;
         loadUserData(user.id);
         if (!localStorage.getItem('disclaimerAccepted')) {
           setIsDisclaimerOpen(true);
@@ -146,6 +160,7 @@ const App: React.FC = () => {
           .then(data => setMinRequiredBalance(data.min_balance || 10.0))
           .catch(() => setMinRequiredBalance(10.0));
       } else {
+        loadedUserIdRef.current = null;
         setSessions([]);
         setCurrentSession(null);
         setMessages([]);

@@ -617,6 +617,7 @@ async def submit_manual_payment(
     amount: str = Form(...),
     payment_type: str = Form("recharge"),
     channel: str = Form("telebirr"),
+    channel_label: str = Form(""),  # Specific account name (e.g. which bank), for the admin's view
     reference: str = Form(""),
     receipt: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
@@ -669,8 +670,10 @@ async def submit_manual_payment(
     with open(os.path.join(RECEIPTS_DIR, receipt_filename), "wb") as f:
         f.write(contents)
 
-    # Store the channel together with the user-supplied reference for the admin's view
-    ref_display = f"{channel}: {reference}" if reference else channel
+    # Store which account (specific bank when given, else the channel) together with
+    # the user-supplied reference, so the admin sees exactly where the money went.
+    account_label = (channel_label or "").strip()[:100] or channel
+    ref_display = f"{account_label}: {reference}" if reference else account_label
 
     new_payment = Payment(
         user_id=current_user.id,
@@ -1668,6 +1671,9 @@ async def get_public_settings(db: Session = Depends(get_db)):
         # Manual payment account details
         "telebirr_number", "telebirr_name",
         "safaricom_number", "safaricom_name",
+        # Banks: JSON list [{label, number, holder}]. The single bank_* keys are
+        # kept for backward compatibility with configs saved before the list.
+        "bank_accounts",
         "bank_name", "bank_account", "bank_holder",
         # Contact admin channels
         "admin_contact_phone", "admin_contact_telegram", "admin_contact_email",
