@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { TelegramAuthUser } from '../services/storageService';
+import React, { useEffect, useRef, useState } from 'react';
+import { TelegramAuthUser, getTelegramConfig } from '../services/storageService';
 
 interface TelegramLoginButtonProps {
   onAuth: (user: TelegramAuthUser) => void;
@@ -14,14 +14,25 @@ let callbackSeq = 0;
 /**
  * Renders Telegram's official Login Widget.
  *
- * Requires VITE_TELEGRAM_BOT_USERNAME (the bot's @username, without the @) and the
- * bot's domain to be linked in @BotFather via /setdomain. If the env var is
- * missing we render nothing rather than a broken widget.
+ * The bot @username comes from the backend (GET /auth/telegram/config) at runtime,
+ * so no frontend build-time env var is needed. The bot's domain must be linked in
+ * @BotFather via /setdomain. If login isn't configured server-side we render
+ * nothing rather than a broken widget.
  */
 const TelegramLoginButton: React.FC<TelegramLoginButtonProps> = ({ onAuth, disabled }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined;
+  const [botUsername, setBotUsername] = useState<string | null>(null);
 
+  // Fetch the public widget config once on mount.
+  useEffect(() => {
+    let active = true;
+    getTelegramConfig().then((cfg) => {
+      if (active && cfg.enabled && cfg.bot_username) setBotUsername(cfg.bot_username);
+    });
+    return () => { active = false; };
+  }, []);
+
+  // Inject the widget once we know the bot username.
   useEffect(() => {
     if (!botUsername || !containerRef.current) return;
 

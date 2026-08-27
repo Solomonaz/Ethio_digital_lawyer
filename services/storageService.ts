@@ -75,6 +75,19 @@ export interface TelegramAuthUser {
     hash: string;
 }
 
+// Public config for the Telegram Login Widget, served by the backend so the
+// frontend needs no build-time env var (the bot @username is public anyway).
+// Returns { enabled:false } on any error, so the button simply stays hidden.
+export const getTelegramConfig = async (): Promise<{ bot_username: string; enabled: boolean }> => {
+    try {
+        const res = await fetch(`${API_URL}/auth/telegram/config`);
+        if (!res.ok) return { bot_username: '', enabled: false };
+        return await res.json();
+    } catch {
+        return { bot_username: '', enabled: false };
+    }
+};
+
 // Sign in with Telegram. The backend verifies the widget's HMAC signature (it
 // alone holds the bot token) and returns a one-time Supabase magic-link token,
 // which we exchange for a real session — so from here on Telegram users are just

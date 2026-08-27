@@ -2,9 +2,8 @@
 
 interface ImportMetaEnv {
     readonly VITE_API_URL: string
-    // Bot @username (without the @) for the Telegram Login Widget. When unset,
-    // the "Sign in with Telegram" button is hidden.
-    readonly VITE_TELEGRAM_BOT_USERNAME: string
+    // Note: the Telegram bot username is NOT a frontend env var — it is served at
+    // runtime by the backend (GET /auth/telegram/config), so no VITE_ var is needed.
     // more env variables...
 }
 

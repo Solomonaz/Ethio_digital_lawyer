@@ -35,6 +35,17 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
+# The bot's public @username, served to the frontend so it never needs a build-time
+# env var (works on Vercel/static hosting, and can change without a rebuild). This
+# is PUBLIC by design — the Login Widget embeds it in the page — so it is safe to
+# return from the API. The secret bot TOKEN is never exposed. Accept the canonical
+# name and the CONFIG_ alias for convenience.
+TELEGRAM_BOT_USERNAME = (
+    os.getenv("TELEGRAM_BOT_USERNAME")
+    or os.getenv("CONFIG_TELEGRAM_BOT_USERNAME")
+    or ""
+).lstrip("@").strip()
+
 # Telegram accounts have no email, so we mint a stable synthetic one per Telegram
 # id. It is marked email-confirmed and never receives mail (magic link only).
 TELEGRAM_EMAIL_DOMAIN = os.getenv("TELEGRAM_EMAIL_DOMAIN", "telegram.ethiolex.app")
@@ -196,3 +207,31 @@ def issue_session_token(tg: dict) -> dict:
     _ensure_supabase_user(tg, email)
     token_hash = _generate_magic_token(email)
     return {"email": email, "token_hash": token_hash}
+
+
+# --------------------------------------------------------------------------- #
+# 3. Public config for the frontend widget
+# --------------------------------------------------------------------------- #
+def is_login_configured() -> bool:
+    """True only when every piece the login flow needs is present.
+
+    We gate the button on the FULL flow (username to render + token to verify +
+    Supabase admin creds to mint the session), so the widget never appears in a
+    state where clicking it would fail after the user authorizes.
+    """
+    return bool(
+        TELEGRAM_BOT_USERNAME
+        and TELEGRAM_BOT_TOKEN
+        and SUPABASE_URL
+        and SUPABASE_SERVICE_ROLE_KEY
+    )
+
+
+def public_config() -> dict:
+    """Non-sensitive config for the Login Widget. Never returns any secret."""
+    enabled = is_login_configured()
+    return {
+        "enabled": enabled,
+        # Only reveal the username when the whole flow is usable.
+        "bot_username": TELEGRAM_BOT_USERNAME if enabled else "",
+    }
