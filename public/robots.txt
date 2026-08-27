@@ -1,0 +1,9 @@
+# EthioLex — https://ethiolex.aderasend.com
+User-agent: *
+Allow: /
+
+# Keep auth/callback and API noise out of the index.
+Disallow: /*?tx_ref=
+Disallow: /api/
+
+Sitemap: https://ethiolex.aderasend.com/sitemap.xml

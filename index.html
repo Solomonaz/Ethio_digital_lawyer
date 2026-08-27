@@ -4,10 +4,79 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- <title>EthioLex - Ethiopian Digital Lawyer</title> -->
+  <!-- Primary SEO. These are the crawl-time defaults; the runtime SEO layer
+       (services/seo.ts) localizes and refines them once the app mounts. -->
+  <title>EthioLex — AI Ethiopian Legal Assistant | Know Your Rights</title>
   <meta name="description"
-    content="EthioLex is your AI-powered Ethiopian legal assistant. Get expert guidance on Ethiopian law, legal procedures, and regulations." />
-  <link rel="icon" type="image/png" href="/logo.png">
+    content="EthioLex is an AI-powered Ethiopian legal assistant. Get instant, sourced guidance on Ethiopian law — the Constitution, Criminal Code, Civil Code, labor law and more — in English and Amharic." />
+  <meta name="keywords"
+    content="Ethiopian law, legal assistant Ethiopia, Ethiopian Constitution, Criminal Code, Civil Code, labor proclamation, Amharic legal AI, know your rights Ethiopia, EthioLex, digital lawyer Ethiopia" />
+  <meta name="author" content="EthioLex" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#064e3b" />
+  <link rel="canonical" href="https://ethiolex.aderasend.com/" />
+
+  <!-- Icons + PWA manifest -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="EthioLex" />
+  <meta property="og:title" content="EthioLex — AI Ethiopian Legal Assistant" />
+  <meta property="og:description"
+    content="Instant, sourced guidance on Ethiopian law in English and Amharic — powered by AI." />
+  <meta property="og:url" content="https://ethiolex.aderasend.com/" />
+  <meta property="og:image" content="https://ethiolex.aderasend.com/logo.png" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="am_ET" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="EthioLex — AI Ethiopian Legal Assistant" />
+  <meta name="twitter:description"
+    content="Instant, sourced guidance on Ethiopian law in English and Amharic — powered by AI." />
+  <meta name="twitter:image" content="https://ethiolex.aderasend.com/logo.png" />
+
+  <!-- Structured data: helps search engines understand the service. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://ethiolex.aderasend.com/#organization",
+        "name": "EthioLex",
+        "url": "https://ethiolex.aderasend.com/",
+        "logo": "https://ethiolex.aderasend.com/logo.png",
+        "description": "AI-powered Ethiopian legal assistant providing preliminary guidance on Ethiopian law in English and Amharic.",
+        "areaServed": { "@type": "Country", "name": "Ethiopia" },
+        "knowsLanguage": ["en", "am"]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://ethiolex.aderasend.com/#website",
+        "url": "https://ethiolex.aderasend.com/",
+        "name": "EthioLex",
+        "publisher": { "@id": "https://ethiolex.aderasend.com/#organization" },
+        "inLanguage": ["en", "am"]
+      },
+      {
+        "@type": "WebApplication",
+        "name": "EthioLex",
+        "url": "https://ethiolex.aderasend.com/",
+        "applicationCategory": "LegalService",
+        "operatingSystem": "Web",
+        "browserRequirements": "Requires JavaScript. Modern browser.",
+        "inLanguage": ["en", "am"],
+        "description": "Chat-based AI legal assistant specialized in Ethiopian law — the Constitution, Criminal Code, Civil Code and labor proclamations — with cited sources.",
+        "provider": { "@id": "https://ethiolex.aderasend.com/#organization" }
+      }
+    ]
+  }
+  </script>
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://aistudiocdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:8000 ws://localhost:8000 http://127.0.0.1:8000 ws://127.0.0.1:8000 https://aistudiocdn.com https://*.supabase.co wss://*.supabase.co;" />
   <script src="https://cdn.tailwindcss.com"></script>

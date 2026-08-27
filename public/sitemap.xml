@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://ethiolex.aderasend.com/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://ethiolex.aderasend.com/?lng=en"/>
+    <xhtml:link rel="alternate" hreflang="am" href="https://ethiolex.aderasend.com/?lng=am"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://ethiolex.aderasend.com/"/>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
