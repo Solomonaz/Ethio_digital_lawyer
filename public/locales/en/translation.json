@@ -337,5 +337,20 @@
     "modeClaimant": "Claimant",
     "modeNeutralDesc": "Balanced legal information",
     "modeLawyerDesc": "Court-ready arguments to defend your position",
-    "modeClaimantDesc": "Help build a case against another party"
+    "modeClaimantDesc": "Help build a case against another party",
+    "makePayment": "Make Payment",
+    "stepIndicator": "Step {{current}} of {{total}}",
+    "backToPlans": "Back to Plans",
+    "continueToPayment": "Continue to Payment",
+    "selectPaymentMethod": "Select a payment method",
+    "verifyPaymentHelper": "Enter your transaction number and attach a receipt to continue",
+    "dropReceiptHere": "Drag & drop your receipt here, or tap to browse",
+    "selectPlan": "Choose Plan",
+    "topSeller": "Top seller",
+    "perMonth": "per month",
+    "perHours": "per {{hours}} hours",
+    "flexibleAmount": "Flexible amount",
+    "taglineRecharge": "Pay only for what you use",
+    "tagline24h": "Quick short-term access",
+    "taglineMonthly": "Best value — most popular"
 }

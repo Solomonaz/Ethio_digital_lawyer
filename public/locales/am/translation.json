@@ -338,5 +338,20 @@
     "modeClaimant": "ከሳሽ",
     "modeNeutralDesc": "ሚዛናዊ የህግ መረጃ",
     "modeLawyerDesc": "አቋምዎን ለመከላከል ለፍርድ ቤት ዝግጁ ክርክሮች",
-    "modeClaimantDesc": "በሌላ ወገን ላይ ክስ ለመመስረት እገዛ"
+    "modeClaimantDesc": "በሌላ ወገን ላይ ክስ ለመመስረት እገዛ",
+    "makePayment": "ክፍያ ይፈጽሙ",
+    "stepIndicator": "ደረጃ {{current}} ከ{{total}}",
+    "backToPlans": "ወደ እቅዶች ተመለስ",
+    "continueToPayment": "ወደ ክፍያ ቀጥል",
+    "selectPaymentMethod": "የክፍያ ዘዴ ይምረጡ",
+    "verifyPaymentHelper": "ለመቀጠል የግብይት ቁጥርዎን ያስገቡ እና ደረሰኝ ያያይዙ",
+    "dropReceiptHere": "ደረሰኝዎን እዚህ ይጎትቱ ወይም ለመምረጥ ይንኩ",
+    "selectPlan": "እቅዱን ይምረጡ",
+    "topSeller": "ከፍተኛ ሽያጭ",
+    "perMonth": "በወር",
+    "perHours": "በ{{hours}} ሰዓት",
+    "flexibleAmount": "ተለዋዋጭ መጠን",
+    "taglineRecharge": "ለተጠቀሙት ብቻ ይክፈሉ",
+    "tagline24h": "ፈጣን የአጭር ጊዜ መዳረሻ",
+    "taglineMonthly": "ምርጥ ዋጋ — በጣም ተወዳጅ"
 }
