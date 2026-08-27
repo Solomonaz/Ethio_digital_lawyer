@@ -41,7 +41,7 @@ from models import User, Chat, ChatMessage, Payment, Setting, UsageLog, PendingR
 import uuid
 from schemas import (
     UserCreate, UserLogin, UserResponse, Token,
-    ChatCreate, ChatResponse, SendMessageRequest
+    ChatCreate, ChatResponse, SendMessageRequest, TelegramLoginRequest
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
@@ -396,6 +396,36 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "subscription_expires_at": (current_user.subscription_expires_at.isoformat() + "Z") if current_user.subscription_expires_at else None,
         "monthly_subscription_expires_at": (current_user.monthly_subscription_expires_at.isoformat() + "Z") if current_user.monthly_subscription_expires_at else None
     }
+
+# --- TELEGRAM LOGIN ("Sign in with Telegram") ---
+from services import telegram_auth_service
+from services.telegram_auth_service import TelegramAuthError
+
+
+@app.post("/auth/telegram")
+@limiter.limit("10/minute")
+async def telegram_login(request: Request, data: TelegramLoginRequest):
+    """Verify a Telegram Login Widget payload and mint a Supabase session token.
+
+    Telegram sits BESIDE email/password and Google login. We never trust the
+    payload directly: the HMAC signature is checked with the bot token first, then
+    a verified login is converted into a real Supabase session (one-time magic-link
+    token) so the rest of the app keeps using Supabase auth unchanged.
+
+    Returns {email, token_hash}; the frontend exchanges token_hash via
+    supabase.auth.verifyOtp({ token_hash, type: 'magiclink' }).
+    """
+    try:
+        trusted = telegram_auth_service.verify_login(data.model_dump())
+        return telegram_auth_service.issue_session_token(trusted)
+    except TelegramAuthError as e:
+        # verify_login failures are auth errors (401); configuration/Supabase
+        # failures are surfaced as 503 so the client can show a clear message.
+        msg = str(e)
+        if "not configured" in msg or "Supabase" in msg:
+            raise HTTPException(status_code=503, detail=msg)
+        raise HTTPException(status_code=401, detail=msg)
+
 
 # --- PHONE VERIFICATION ENDPOINTS ---
 from services.telegram_service import TelegramService

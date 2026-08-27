@@ -64,6 +64,47 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     return fetchProfile(token);
 };
 
+// The payload the Telegram Login Widget hands back after the user authorizes.
+export interface TelegramAuthUser {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date: number;
+    hash: string;
+}
+
+// Sign in with Telegram. The backend verifies the widget's HMAC signature (it
+// alone holds the bot token) and returns a one-time Supabase magic-link token,
+// which we exchange for a real session — so from here on Telegram users are just
+// ordinary Supabase-authenticated users. Returns the app profile on success.
+export const loginWithTelegram = async (tgUser: TelegramAuthUser): Promise<User> => {
+    const res = await fetch(`${API_URL}/auth/telegram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tgUser),
+    });
+    if (!res.ok) {
+        let detail = 'Telegram sign-in failed';
+        try { detail = (await res.json()).detail || detail; } catch { /* ignore */ }
+        throw new Error(detail);
+    }
+    const { token_hash } = await res.json();
+
+    // Exchange the one-time token for a Supabase session (stored automatically).
+    // token_hash already encodes the user, so no email is passed here.
+    const { data, error } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: 'magiclink',
+    });
+    if (error) throw new Error(error.message);
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Telegram sign-in failed');
+    localStorage.setItem('token', token);
+    return fetchProfile(token);
+};
+
 // Starts the Google OAuth redirect. The page navigates away and returns with a
 // session, which observeAuthState picks up. Nothing is returned synchronously.
 export const loginWithGoogle = async (): Promise<void> => {

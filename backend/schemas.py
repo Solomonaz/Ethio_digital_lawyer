@@ -35,6 +35,19 @@ class Token(BaseModel):
     user_id: int
     username: str
 
+# --- Telegram Login Schema ---
+# The raw payload delivered by the Telegram Login Widget. All fields except id,
+# auth_date and hash are optional (a Telegram account may have no username, last
+# name, or public photo). The signature is verified server-side before use.
+class TelegramLoginRequest(BaseModel):
+    id: int
+    auth_date: int
+    hash: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    photo_url: Optional[str] = None
+
 # --- Phone Verification Schemas ---
 class RequestVerificationCode(BaseModel):
     phone_number: str
