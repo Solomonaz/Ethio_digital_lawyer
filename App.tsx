@@ -16,6 +16,7 @@ import QuotaExhaustedModal from './components/QuotaExhaustedModal';
 import { observeAuthState, observePasswordRecovery, getUserSessions, createNewSession, deleteSession, logoutUser, sendMessageToBackend } from './services/storageService';
 import { Message, Language, Attachment, User, ChatSession, Perspective } from './types';
 import { API_URL } from './constants';
+import { updateDocumentSeo, type SeoView } from './services/seo';
 
 const App: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -65,6 +66,23 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // Keep document SEO (title, description, canonical, Open Graph, hreflang, robots)
+  // in sync with the active language and the surface being shown. The public
+  // landing page is indexable; the authenticated app and recovery screens are
+  // marked noindex so crawlers rank the marketing page, not an empty app shell.
+  useEffect(() => {
+    const view: SeoView = recoveryMode ? 'recovery' : currentUser ? 'app' : 'landing';
+    updateDocumentSeo({
+      lang: i18n.language || 'en',
+      view,
+      title: view === 'landing'
+        ? t('seoTitleLanding', { defaultValue: 'EthioLex — AI Ethiopian Legal Assistant | Know Your Rights' })
+        : t('seoTitleApp', { defaultValue: 'EthioLex — Your Ethiopian Legal Assistant' }),
+      description: t('seoDescription', { defaultValue: 'AI-powered guidance on Ethiopian law in English and Amharic.' }),
+      keywords: t('seoKeywords', { defaultValue: '' }),
+    });
+  }, [i18n.language, currentUser, recoveryMode, t]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });

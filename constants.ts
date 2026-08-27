@@ -3,6 +3,16 @@ import { Language } from './types';
 
 export const APP_NAME = "EthioLex";
 
+// Canonical public origin, used for SEO absolute URLs (canonical, Open Graph,
+// hreflang, sitemap) when a real browser origin isn't available. At runtime the
+// SEO layer prefers window.location.origin, so this is only the SSR/fallback and
+// the value baked into the static sitemap/robots. Override per-deploy with
+// VITE_SITE_URL (e.g. https://www.ethiolex.com).
+export const SITE_URL = (import.meta.env.VITE_SITE_URL as string) || 'https://ethiolex.aderasend.com';
+
+// Languages the app is published in, for hreflang alternates.
+export const SUPPORTED_LOCALES = ['en', 'am'] as const;
+
 // Single source of truth for the backend API base URL.
 // Defaults to the Vite dev proxy at "/api" (-> http://127.0.0.1:8000);
 // set VITE_API_URL to point at a real backend origin in production.

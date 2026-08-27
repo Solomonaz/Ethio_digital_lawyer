@@ -1,0 +1,27 @@
+{
+  "name": "EthioLex — Ethiopian Legal Assistant",
+  "short_name": "EthioLex",
+  "description": "AI-powered guidance on Ethiopian law in English and Amharic.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0c0e",
+  "theme_color": "#064e3b",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["legal", "productivity", "education"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
