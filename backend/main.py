@@ -402,6 +402,17 @@ from services import telegram_auth_service
 from services.telegram_auth_service import TelegramAuthError
 
 
+@app.get("/auth/telegram/config")
+async def telegram_config():
+    """Public config for the Telegram Login Widget (the bot @username + enabled flag).
+
+    The bot username is intentionally public — it is embedded in the widget every
+    visitor's browser loads — so serving it here is safe and lets the frontend work
+    without any build-time env var. The secret bot TOKEN is never returned.
+    """
+    return telegram_auth_service.public_config()
+
+
 @app.post("/auth/telegram")
 @limiter.limit("10/minute")
 async def telegram_login(request: Request, data: TelegramLoginRequest):
