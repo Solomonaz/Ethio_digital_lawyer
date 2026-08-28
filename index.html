@@ -108,6 +108,14 @@
     }
     .skip-link:focus { top: 12px; }
 
+    /* Telegram Login Widget: the widget renders a rounded button inside a SQUARE
+       cross-origin iframe, so its corners show as dark triangles behind the button.
+       Clip the iframe to the button's radius and drop the inline baseline gap. */
+    iframe[id^="telegram-login"] {
+      border-radius: 8px;
+      display: block;
+    }
+
     /* Subtle, unobtrusive scrollbar for scroll areas (e.g. the payment modal body) */
     .subtle-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
     .subtle-scroll::-webkit-scrollbar { width: 8px; height: 8px; }

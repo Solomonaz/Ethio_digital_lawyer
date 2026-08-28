@@ -17,6 +17,7 @@ db = SessionLocal()
 # Seed Settings
 default_settings = [
     {"key": "model_name", "value": "gemini-2.5-flash", "desc": "Active AI Model Name"},
+    {"key": "search_grounding_model", "value": "", "desc": "Gemini model for Google Search web grounding when no verified provision matches. Blank = web search disabled."},
     {"key": "cost_input_1m", "value": "240.0", "desc": "Cost in ETB per 1 Million Input Tokens"},
     {"key": "cost_output_1m", "value": "1440.0", "desc": "Cost in ETB per 1 Million Output Tokens"},
     {"key": "subscription_24h_price", "value": "100.0", "desc": "Price for 24-hour subscription (ETB)"},

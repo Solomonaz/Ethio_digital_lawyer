@@ -69,7 +69,9 @@ const TelegramLoginButton: React.FC<TelegramLoginButtonProps> = ({ onAuth, disab
     <div
       className={`flex justify-center transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
     >
-      <div ref={containerRef} />
+      {/* rounded-lg + overflow-hidden clips the widget iframe's square corners so
+          they don't show as dark triangles behind the rounded button. */}
+      <div ref={containerRef} className="overflow-hidden rounded-lg leading-none" />
     </div>
   );
 };

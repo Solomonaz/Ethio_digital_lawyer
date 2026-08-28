@@ -67,8 +67,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
     const emptyProvision = { law_code: '', article: '', title: '', content: '', language: 'en', source_url: '' };
     const [newProvision, setNewProvision] = useState({ ...emptyProvision });
 
+    // PDF import (extract provisions from a PDF for review before saving)
+    type ExtractedProvision = { law_code: string; article: string; title: string; content: string; language: string; source_url: string };
+    const [importing, setImporting] = useState(false);
+    const [savingBulk, setSavingBulk] = useState(false);
+    const [extracted, setExtracted] = useState<ExtractedProvision[]>([]);
+    const [importMethod, setImportMethod] = useState<string>('');
+
     // Model Pricing State
     const [modelName, setModelName] = useState('gemini-3-pro-preview');
+    // Google Search web-grounding model (hybrid RAG fallback). Blank = disabled.
+    const [searchModel, setSearchModel] = useState('');
     const [inputCost, setInputCost] = useState('240');
     const [outputCost, setOutputCost] = useState('1440');
     const [minBalance, setMinBalance] = useState('10.0');
@@ -170,6 +179,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             // Parse settings into state
             const modelSetting = data.find((s: AdminSetting) => s.key === 'model_name');
             if (modelSetting) setModelName(modelSetting.value);
+
+            // May legitimately be an empty string (web search disabled), so set it
+            // whenever the setting exists rather than only when truthy.
+            const searchModelSetting = data.find((s: AdminSetting) => s.key === 'search_grounding_model');
+            if (searchModelSetting) setSearchModel(searchModelSetting.value || '');
 
             const inputSetting = data.find((s: AdminSetting) => s.key === 'cost_input_1m');
             if (inputSetting) setInputCost(inputSetting.value);
@@ -319,6 +333,81 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
         }
     };
 
+    // Upload a PDF and get back extracted provisions for review (not yet saved).
+    const handleImportPdf = async (fileList: FileList | null) => {
+        const file = fileList?.[0];
+        if (!file) return;
+        setImporting(true); setError(''); setSuccess('');
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            // NOTE: no Content-Type header — the browser sets the multipart boundary.
+            const res = await fetch(`${API_URL}/admin/legal/import-pdf`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: fd,
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d.detail || 'Failed to read the PDF');
+            }
+            const data = await res.json();
+            // Default each provision's Source to the stored original PDF (provenance).
+            const docUrl = `${API_URL}/legal/document/${data.filename}`;
+            setExtracted((data.provisions || []).map((p: any) => ({
+                law_code: p.law_code || '',
+                article: p.article || '',
+                title: p.title || '',
+                content: p.content || '',
+                language: p.language || 'en',
+                source_url: docUrl,
+            })));
+            setImportMethod(data.method || '');
+            setSuccess(`Extracted ${data.count} provision(s) ${data.method === 'vision' ? '(scanned / OCR)' : '(digital text)'}. Review and save below.`);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    const updateExtracted = (idx: number, field: keyof ExtractedProvision, value: string) => {
+        setExtracted(prev => prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
+    };
+
+    const removeExtracted = (idx: number) => {
+        setExtracted(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    // Save the reviewed batch to the library (each provision is embedded server-side).
+    const saveExtracted = async () => {
+        const valid = extracted.filter(p => p.law_code.trim() && p.content.trim());
+        if (valid.length === 0) {
+            setError('Nothing to save — each provision needs a law name and text.');
+            return;
+        }
+        setSavingBulk(true); setError(''); setSuccess('');
+        try {
+            const res = await fetch(`${API_URL}/admin/legal/bulk`, {
+                method: 'POST', headers, body: JSON.stringify({ provisions: valid }),
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d.detail || 'Failed to save provisions');
+            }
+            const data = await res.json();
+            const errCount = (data.errors || []).length;
+            setSuccess(`Saved ${data.created_count} provision(s)${errCount ? `, ${errCount} skipped` : ''}.`);
+            setExtracted([]);
+            setImportMethod('');
+            fetchProvisions();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSavingBulk(false);
+        }
+    };
+
     const deleteProvision = async (id: number) => {
         try {
             const res = await fetch(`${API_URL}/admin/legal/${id}`, { method: 'DELETE', headers });
@@ -390,6 +479,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
             // 1. Model Name
             await fetch(`${API_URL}/admin/settings/model_name`, {
                 method: 'PUT', headers, body: JSON.stringify({ value: modelName, description: 'Active AI Model Name' })
+            });
+            // 1b. Web-search grounding model (blank = disabled). Trimmed so a value of
+            // spaces counts as blank and turns web search off.
+            await fetch(`${API_URL}/admin/settings/search_grounding_model`, {
+                method: 'PUT', headers, body: JSON.stringify({ value: searchModel.trim(), description: 'Gemini model for Google Search web grounding when no verified provision matches. Blank = web search disabled.' })
             });
             // 2. Input Cost
             await fetch(`${API_URL}/admin/settings/cost_input_1m`, {
@@ -848,6 +942,85 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                     ) : activeTab === 'legal' ? (
                         <div className="p-6 md:p-8 min-h-full">
                             <div className="max-w-4xl mx-auto space-y-6">
+                                {/* Import from PDF card */}
+                                <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                                    <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-800 px-6 py-5">
+                                        <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                            <span className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">📄</span>
+                                            Import from PDF
+                                        </h2>
+                                        <p className="text-emerald-50/80 text-sm mt-1">Upload a legal PDF — including scanned or Amharic documents. The AI extracts each article for you to review before saving. The original PDF is stored as the source.</p>
+                                    </div>
+                                    <div className="p-6 space-y-4">
+                                        <label className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${importing ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer'}`}>
+                                            {importing ? (
+                                                <><span className="w-4 h-4 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" /> Reading PDF…</>
+                                            ) : (
+                                                <>⬆ Choose PDF to import</>
+                                            )}
+                                            <input type="file" accept="application/pdf" className="hidden" disabled={importing}
+                                                onChange={(e) => { handleImportPdf(e.target.files); e.target.value = ''; }} />
+                                        </label>
+
+                                        {extracted.length > 0 && (
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm font-semibold text-slate-700">{extracted.length} extracted provision(s) — review, edit, then save</p>
+                                                    {importMethod && <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{importMethod === 'vision' ? 'scanned / OCR' : 'digital text'}</span>}
+                                                </div>
+                                                {extracted.map((p, idx) => (
+                                                    <div key={idx} className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50/60">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs font-bold text-slate-400">#{idx + 1}</span>
+                                                            <button onClick={() => removeExtracted(idx)} className="text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                            <div className="md:col-span-2">
+                                                                <label className="block text-[11px] font-medium text-slate-500 mb-1">Law name <span className="text-red-500">*</span></label>
+                                                                <input type="text" value={p.law_code} onChange={(e) => updateExtracted(idx, 'law_code', e.target.value)}
+                                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[11px] font-medium text-slate-500 mb-1">Article</label>
+                                                                <input type="text" value={p.article} onChange={(e) => updateExtracted(idx, 'article', e.target.value)}
+                                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                            <div className="md:col-span-2">
+                                                                <label className="block text-[11px] font-medium text-slate-500 mb-1">Title / heading</label>
+                                                                <input type="text" value={p.title} onChange={(e) => updateExtracted(idx, 'title', e.target.value)}
+                                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[11px] font-medium text-slate-500 mb-1">Language</label>
+                                                                <select value={p.language} onChange={(e) => updateExtracted(idx, 'language', e.target.value)}
+                                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                                                    <option value="en">English</option>
+                                                                    <option value="am">Amharic</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Provision text <span className="text-red-500">*</span></label>
+                                                            <textarea value={p.content} onChange={(e) => updateExtracted(idx, 'content', e.target.value)} rows={4}
+                                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-slate-800 text-sm resize-y focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={saveExtracted} disabled={savingBulk}
+                                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60">
+                                                        {savingBulk ? 'Saving…' : `Save all ${extracted.filter(p => p.law_code.trim() && p.content.trim()).length} to library`}
+                                                    </button>
+                                                    <button onClick={() => { setExtracted([]); setImportMethod(''); }} disabled={savingBulk}
+                                                        className="px-4 py-2.5 text-slate-500 hover:text-slate-700 text-sm font-medium">Discard</button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 {/* Add provision card */}
                                 <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
                                     <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-5">
@@ -891,8 +1064,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-y" />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-500 mb-1.5">Source URL (verifiable link)</label>
-                                            <input type="text" value={newProvision.source_url} onChange={(e) => setNewProvision({ ...newProvision, source_url: e.target.value })} placeholder="https://…"
+                                            <label className="block text-xs font-medium text-slate-500 mb-1.5">Source <span className="text-slate-400 font-normal">(URL or citation)</span></label>
+                                            <input type="text" value={newProvision.source_url} onChange={(e) => setNewProvision({ ...newProvision, source_url: e.target.value })} placeholder="https://…  or  Federal Negarit Gazeta 2011 E.C., No. 89 (print)"
                                                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all" />
                                         </div>
                                         <div className="flex justify-end">
@@ -926,7 +1099,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                             </div>
                                                             {p.title && <div className="text-xs text-slate-500 mt-0.5">{p.title}</div>}
                                                             <p className="text-[13px] text-slate-600 mt-1.5 line-clamp-2">{p.content}</p>
-                                                            {p.source_url && <a href={p.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Source ↗</a>}
+                                                            {p.source_url && (
+                                                                /\/legal\/document\//.test(p.source_url)
+                                                                    // Imported from an uploaded PDF — show a clear "from PDF" chip that opens the original.
+                                                                    ? <a href={p.source_url} target="_blank" rel="noopener noreferrer" title="Open the source PDF this was imported from" className="text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md mt-1 inline-flex items-center gap-1">📄 From PDF ↗</a>
+                                                                    : /^(https?:\/\/|\/)/i.test(p.source_url)
+                                                                        ? <a href={p.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Source ↗</a>
+                                                                        : <span className="text-xs text-slate-400 mt-1 inline-block">Source: {p.source_url}</span>
+                                                            )}
                                                         </div>
                                                         <div className="flex-shrink-0">
                                                             {confirmDeleteProvision === p.id ? (
@@ -977,6 +1157,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack }) => {
                                                     className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                                                     placeholder="e.g. gemini-3-pro-preview"
                                                 />
+                                            </div>
+                                            <div className="md:col-span-3">
+                                                <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                                                    Web Search Model <span className="text-slate-400 font-normal">(hybrid RAG fallback)</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={searchModel}
+                                                    onChange={(e) => setSearchModel(e.target.value)}
+                                                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                                    placeholder="e.g. gemini-2.5-flash — leave blank to disable web search"
+                                                />
+                                                <p className="text-[11px] text-slate-400 mt-1.5">
+                                                    When the verified legal library has no match, the AI searches the web with this model for current Ethiopian law. Must be a Google-Search-capable Gemini model. <span className="font-semibold text-slate-500">Leave blank to turn web search off.</span>
+                                                </p>
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Input Cost / 1M Tokens</label>

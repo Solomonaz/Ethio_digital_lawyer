@@ -13,3 +13,4 @@ slowapi
 gunicorn
 psycopg2-binary
 pgvector
+pypdf
