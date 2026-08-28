@@ -158,8 +158,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, initialView = 'login', o
         </div>
       </div>
 
-      <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
-        <div className="relative transform overflow-hidden rounded-3xl bg-white shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-4xl lg:flex">
+      <div className="flex min-h-full items-stretch justify-center p-0 text-center sm:items-center sm:p-0">
+        {/* Mobile: full-screen, edge-to-edge (w-full, stretched height, no rounding).
+            sm+ : a centered, rounded card with a max width. lg: two-panel split. */}
+        <div className="relative transform overflow-hidden bg-white shadow-2xl transition-all w-full rounded-none sm:my-8 sm:w-full sm:max-w-4xl sm:rounded-3xl lg:flex">
 
           {/* Left Side - Branding Panel */}
           <div className="hidden lg:flex relative flex-col justify-between overflow-hidden bg-emerald-900 p-8 text-left lg:w-5/12">

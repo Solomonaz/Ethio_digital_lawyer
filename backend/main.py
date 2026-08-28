@@ -36,6 +36,11 @@ os.makedirs(RECEIPTS_DIR, exist_ok=True)
 ALLOWED_RECEIPT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
 MAX_RECEIPT_BYTES = 5 * 1024 * 1024  # 5 MB
 
+# --- Legal source PDFs (admin uploads for the RAG library) ---
+LEGAL_DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "legal_docs")
+os.makedirs(LEGAL_DOCS_DIR, exist_ok=True)
+MAX_LEGAL_DOC_BYTES = 25 * 1024 * 1024  # 25 MB
+
 from database import engine, Base, get_db
 from models import User, Chat, ChatMessage, Payment, Setting, UsageLog, PendingRegistration, LegalProvision
 import uuid
@@ -51,6 +56,7 @@ from auth import (
 from google import genai
 from google.genai import types
 import legal_service
+from services import pdf_import_service
 
 load_dotenv()
 
@@ -367,6 +373,41 @@ def get_quota_reset_hours(db: Session) -> int:
     if setting:
         return int(setting.value)
     return 24  # Default: 24 hours (daily reset)
+
+# --- Helper: Get the model used for Google Search web grounding (hybrid RAG) ---
+def get_search_grounding_model(db: Session) -> str:
+    """Model name for the Google-Search web-grounding fallback.
+
+    This is the admin's on/off switch for web search: a non-empty value names the
+    (search-capable) Gemini model to use when the verified library has no match; a
+    BLANK value disables web search entirely, so the system never calls it.
+    """
+    setting = db.query(Setting).filter(Setting.key == "search_grounding_model").first()
+    return (setting.value or "").strip() if setting else ""
+
+
+def _extract_web_sources(response) -> list:
+    """Pull web citations from a Google-Search-grounded response.
+
+    Reads candidates[].grounding_metadata.grounding_chunks[].web (the correct
+    location in the google-genai SDK) and de-duplicates by URI. Fully defensive:
+    any shape mismatch yields an empty list rather than breaking the answer.
+    """
+    out, seen = [], set()
+    try:
+        for cand in (getattr(response, "candidates", None) or []):
+            gm = getattr(cand, "grounding_metadata", None)
+            if not gm:
+                continue
+            for ch in (getattr(gm, "grounding_chunks", None) or []):
+                web = getattr(ch, "web", None)
+                uri = getattr(web, "uri", None) if web else None
+                if uri and uri not in seen:
+                    seen.add(uri)
+                    out.append({"title": getattr(web, "title", None), "uri": uri})
+    except Exception as e:
+        print(f"[WEB GROUNDING] source extraction failed: {e}")
+    return out
 
 # --- AUTH ENDPOINTS ---
 
@@ -1106,7 +1147,24 @@ async def send_message(
             legal_matches = legal_service.search_provisions(db, message_data.message)
         except Exception as _rag_err:
             print(f"[LEGAL RAG] retrieval skipped: {_rag_err}")
-        grounding_instruction = legal_service.build_system_addendum(legal_matches)
+
+        # --- Hybrid grounding: verified library first, web search as fallback ---
+        # Web search runs ONLY when (a) the library returned no match, (b) an admin
+        # has configured a search-capable model (blank = disabled), and (c) this is
+        # not a limited free-trial search (keeps web-grounding cost on paid usage).
+        search_model = get_search_grounding_model(db)
+        use_web_search = bool(search_model) and not legal_matches and not is_free_search
+
+        gen_model = active_model
+        gen_tools = None
+        if use_web_search:
+            gen_model = search_model
+            gen_tools = [types.Tool(google_search=types.GoogleSearch())]
+            grounding_instruction = legal_service.build_web_search_addendum()
+            print(f"[HYBRID RAG] no library match -> web search via '{search_model}'")
+        else:
+            grounding_instruction = legal_service.build_system_addendum(legal_matches)
+
         # Citations are finalised AFTER generation — only provisions the model
         # actually cited are shown (avoids clutter on general-knowledge answers).
         legal_citations = []
@@ -1118,12 +1176,13 @@ async def send_message(
             top_p=0.95,
             top_k=40,
             # max_output_tokens=2048,
-            system_instruction=SYSTEM_INSTRUCTION + grounding_instruction + perspective_instruction
+            system_instruction=SYSTEM_INSTRUCTION + grounding_instruction + perspective_instruction,
+            tools=gen_tools,
         )
-        
-        # Send message using the new SDK
+
+        # Send message using the new SDK (web-search model when grounding on the web)
         response = gemini_client.models.generate_content(
-            model=active_model,
+            model=gen_model,
             contents=contents,
             config=generation_config
         )
@@ -1146,15 +1205,8 @@ async def send_message(
             legal_service.filter_cited(legal_matches, bot_text)
         )
 
-        # Extract grounding sources if available
-        grounding_sources = []
-        if hasattr(response, 'grounding_metadata') and response.grounding_metadata:
-            for source in response.grounding_metadata.grounding_chunks:
-                if hasattr(source, 'web'):
-                    grounding_sources.append({
-                        "title": source.web.title if hasattr(source.web, 'title') else None,
-                        "uri": source.web.uri if hasattr(source.web, 'uri') else None
-                    })
+        # Extract web grounding sources (populated only on the web-search branch).
+        grounding_sources = _extract_web_sources(response)
         
         # Save bot response (with the verified citations that grounded it)
         bot_message = ChatMessage(
@@ -1652,6 +1704,107 @@ async def admin_create_provision(data: dict, admin: User = Depends(get_admin_use
     return _serialize_provision(p)
 
 
+@app.post("/admin/legal/import-pdf")
+async def admin_import_legal_pdf(
+    file: UploadFile = File(...),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Extract provisions from an uploaded legal PDF for admin review (Admin only).
+
+    Digital-text-first (pypdf), falling back to Gemini vision for scanned/Amharic
+    PDFs, and auto-splitting into one item per article. The original PDF is stored
+    for provenance and served at /legal/document/{filename}. Nothing is written to
+    the legal library here — the admin reviews the returned provisions, then saves
+    them via /admin/legal/bulk.
+    """
+    if not gemini_client:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext != ".pdf":
+        raise HTTPException(status_code=422, detail="Please upload a PDF file.")
+
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(status_code=422, detail="The PDF file is empty.")
+    if len(pdf_bytes) > MAX_LEGAL_DOC_BYTES:
+        raise HTTPException(status_code=422, detail="PDF must be 25 MB or smaller.")
+
+    # Store the original under a safe, unique name (never trust the client filename).
+    stored_name = f"{uuid.uuid4().hex}.pdf"
+    with open(os.path.join(LEGAL_DOCS_DIR, stored_name), "wb") as f:
+        f.write(pdf_bytes)
+
+    model_setting = db.query(Setting).filter(Setting.key == "model_name").first()
+    model = model_setting.value if model_setting else "gemini-2.5-flash"
+
+    try:
+        result = pdf_import_service.extract_provisions(pdf_bytes, model)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    if not result["provisions"]:
+        raise HTTPException(
+            status_code=422,
+            detail="No legal provisions could be read from this PDF. Try a clearer scan or enter the text manually.",
+        )
+
+    return {
+        "filename": stored_name,          # frontend builds the source link from this
+        "method": result["method"],       # "text" or "vision" (for admin info)
+        "count": len(result["provisions"]),
+        "provisions": result["provisions"],
+    }
+
+
+@app.post("/admin/legal/bulk")
+async def admin_bulk_create_provisions(data: dict, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Save a reviewed batch of provisions to the library (Admin only). Embeds each.
+
+    Partial success is allowed: any item that fails to embed is reported in `errors`
+    while the rest are saved, so one bad row never loses the whole import.
+    """
+    items = data.get("provisions") or []
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=422, detail="No provisions to save.")
+
+    created, errors = [], []
+    for idx, item in enumerate(items):
+        law_code = (str(item.get("law_code") or "")).strip()
+        content = (str(item.get("content") or "")).strip()
+        if not law_code or not content:
+            errors.append({"index": idx, "reason": "Law name and provision text are required."})
+            continue
+        p = LegalProvision(
+            law_code=law_code,
+            article=(str(item.get("article") or "")).strip() or None,
+            title=(str(item.get("title") or "")).strip() or None,
+            content=content,
+            language=(str(item.get("language") or "en")).strip() or "en",
+            source_url=(str(item.get("source_url") or "")).strip() or None,
+            is_active=bool(item.get("is_active", True)),
+        )
+        try:
+            _embed_provision(p)
+        except Exception as e:
+            print(f"[LEGAL KB] bulk embedding failed at {idx}: {e}")
+            errors.append({"index": idx, "reason": "Could not generate the embedding."})
+            continue
+        db.add(p)
+        created.append(p)
+
+    db.commit()
+    for p in created:
+        db.refresh(p)
+
+    return {
+        "created": [_serialize_provision(p) for p in created],
+        "created_count": len(created),
+        "errors": errors,
+    }
+
+
 @app.put("/admin/legal/{pid}")
 async def admin_update_provision(pid: int, data: dict, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     """Update a provision (Admin only). Re-embeds if the content/reference changed."""
@@ -1695,6 +1848,23 @@ async def admin_delete_provision(pid: int, admin: User = Depends(get_admin_user)
     db.delete(p)
     db.commit()
     return {"message": "Deleted"}
+
+# --- PUBLIC: serve a stored legal source PDF ---
+
+@app.get("/legal/document/{filename}")
+async def get_legal_document(filename: str):
+    """Serve a stored legal source PDF (public, so citation links work for everyone).
+
+    These are official legal texts uploaded by an admin. The filename is a random
+    hex generated at upload; we still basename it and confine reads to LEGAL_DOCS_DIR
+    to prevent any path traversal.
+    """
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(LEGAL_DOCS_DIR, safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+    return FileResponse(file_path, filename=safe_name, media_type="application/pdf")
+
 
 # --- PUBLIC SETTINGS ENDPOINT ---
 

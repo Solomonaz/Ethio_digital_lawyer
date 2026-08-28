@@ -111,6 +111,27 @@ def build_system_addendum(matches: List[Tuple[LegalProvision, float]]) -> str:
     )
 
 
+def build_web_search_addendum() -> str:
+    """System-instruction addendum for the WEB-SEARCH fallback branch of the hybrid.
+
+    Used only when the verified library had no match AND an admin has enabled web
+    grounding. It steers the model to ground its answer in current, authoritative
+    Ethiopian sources it finds via the Google Search tool, while keeping the same
+    no-fabrication discipline as the DB path.
+    """
+    return (
+        "\n\n=== NO VERIFIED LIBRARY SOURCE — USE WEB SEARCH ===\n"
+        "The verified legal library has no provision for this question, so use the Google Search "
+        "tool to find current, authoritative Ethiopian legal sources — official proclamations, the "
+        "Federal Negarit Gazeta, and government or court publications. Base your answer on what you "
+        "actually find and cite the specific law and article. Prefer official/primary sources over "
+        "blogs or forums. NEVER fabricate article numbers or proclamations — if you cannot verify a "
+        "provision, say so plainly. End with a short note that this answer draws on web sources "
+        "(not the verified library) and should be confirmed against the official law or a licensed "
+        "Ethiopian lawyer."
+    )
+
+
 def _provision_is_cited(p: LegalProvision, answer_lower: str) -> bool:
     """True if the answer text actually references this provision (its law + article)."""
     if not p.law_code or p.law_code.lower() not in answer_lower:
